@@ -58,10 +58,13 @@ const els = {
   dataPathMeta: document.querySelector("#dataPathMeta"),
   syncRootDisplay: document.querySelector("#syncRootDisplay"),
   syncRootHint: document.querySelector("#syncRootHint"),
+  cloudDeleteWarning: document.querySelector("#cloudDeleteWarning"),
   lastSync: document.querySelector("#lastSync"),
   logPanel: document.querySelector(".log-panel"),
   toast: document.querySelector("#toast"),
 };
+
+const CLOUD_DELETE_CONFIRM_TEXT = "删除云端";
 
 let appState = {
   config: null,
@@ -107,6 +110,22 @@ function preferredRunAction() {
     return els.mediaSyncBtn;
   }
   return els.notesSyncBtn;
+}
+
+function isCloudDeleteMode(mode = fields.mediaMode.value) {
+  return mode === "move";
+}
+
+function updateMediaModeWarning() {
+  els.cloudDeleteWarning?.classList.toggle("hidden", !isCloudDeleteMode());
+}
+
+function confirmCloudDelete(actionLabel) {
+  const value = window.prompt(
+    `${actionLabel}会在同步成功后删除 iCloud 云端对应照片/视频。\n\n` +
+      `请先确认 NAS 已有完整备份。若继续，请输入：${CLOUD_DELETE_CONFIRM_TEXT}`
+  );
+  return value === CLOUD_DELETE_CONFIRM_TEXT;
 }
 
 function guideTargets(step) {
@@ -278,6 +297,7 @@ function applyProfile(profile) {
 
   els.activeProfileTitle.textContent = profile.name || "当前方案";
   els.deleteProfileBtn.disabled = (appState.config?.profiles || []).length <= 1;
+  updateMediaModeWarning();
   updateGuide();
 }
 
@@ -440,10 +460,21 @@ async function refreshStatus() {
   }
 }
 
-async function saveCurrentProfile(includePasswords = true) {
+async function saveCurrentProfile(includePasswords = true, options = {}) {
+  const payload = collectConfig(includePasswords);
+  const previousMode = activeProfile()?.media_mode || "copy";
+  if (
+    isCloudDeleteMode(payload.media_mode) &&
+    previousMode !== "move" &&
+    !options.skipCloudDeleteConfirm &&
+    !confirmCloudDelete("保存云端删除模式")
+  ) {
+    showToast("已取消保存");
+    return null;
+  }
   const config = await api("/api/config", {
     method: "POST",
-    body: JSON.stringify(collectConfig(includePasswords)),
+    body: JSON.stringify(payload),
   });
   appState.config = config;
   appState.activeProfileId = config.active_profile_id;
@@ -532,7 +563,10 @@ els.form.addEventListener("submit", async (event) => {
   event.preventDefault();
   try {
     releaseGuideStep();
-    await saveCurrentProfile(true);
+    const config = await saveCurrentProfile(true);
+    if (!config) {
+      return;
+    }
     fields.authPassword.value = "";
     fields.imapPassword.value = "";
     showToast("方案已保存");
@@ -571,7 +605,10 @@ Object.entries(guideButtons).forEach(([step, button]) => {
 els.authBtn.addEventListener("click", async () => {
   try {
     releaseGuideStep();
-    await saveCurrentProfile(true);
+    const config = await saveCurrentProfile(true);
+    if (!config) {
+      return;
+    }
     const job = await api("/api/auth", {
       method: "POST",
       body: JSON.stringify({
@@ -592,7 +629,15 @@ els.authBtn.addEventListener("click", async () => {
 els.mediaSyncBtn.addEventListener("click", async () => {
   try {
     releaseGuideStep();
-    await saveCurrentProfile(true);
+    const nextConfig = collectConfig(true);
+    if (isCloudDeleteMode(nextConfig.media_mode) && !confirmCloudDelete("开始媒体同步")) {
+      showToast("已取消同步");
+      return;
+    }
+    const config = await saveCurrentProfile(true, { skipCloudDeleteConfirm: true });
+    if (!config) {
+      return;
+    }
     fields.authPassword.value = "";
     const job = await api("/api/sync/media", {
       method: "POST",
@@ -605,10 +650,15 @@ els.mediaSyncBtn.addEventListener("click", async () => {
   }
 });
 
+fields.mediaMode.addEventListener("change", updateMediaModeWarning);
+
 els.notesSyncBtn.addEventListener("click", async () => {
   try {
     releaseGuideStep();
-    await saveCurrentProfile(true);
+    const config = await saveCurrentProfile(true);
+    if (!config) {
+      return;
+    }
     fields.imapPassword.value = "";
     const job = await api("/api/sync/notes", {
       method: "POST",

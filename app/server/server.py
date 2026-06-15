@@ -234,7 +234,8 @@ def normalize_profile(profile: dict[str, Any]) -> None:
     profile["data_subdir"] = str(profile.get("data_subdir", profile["id"]))
     profile["apple_id"] = str(profile.get("apple_id", "")).strip()
     profile["domain"] = "cn" if str(profile.get("domain", "com")).lower() == "cn" else "com"
-    profile["media_mode"] = "mirror" if profile.get("media_mode") == "mirror" else "copy"
+    media_mode = str(profile.get("media_mode") or "copy")
+    profile["media_mode"] = media_mode if media_mode in {"copy", "mirror", "move"} else "copy"
     profile["size"] = str(profile.get("size") or "original")
     profile["folder_structure"] = str(profile.get("folder_structure") or "{:%Y/%m/%d}")
     profile["sync_interval_minutes"] = max(15, int_or_default(profile.get("sync_interval_minutes"), 360))
@@ -562,6 +563,7 @@ def build_base_icloudpd_args(
     directory: Path,
     cookie_dir: Path,
     password: str = "",
+    include_media_mode: bool = True,
 ) -> list[str]:
     args = [
         resolve_command("icloudpd") or "icloudpd",
@@ -596,8 +598,11 @@ def build_base_icloudpd_args(
         args.extend(["--recent", profile["recent"]])
     if profile.get("until_found"):
         args.extend(["--until-found", profile["until_found"]])
-    if profile.get("media_mode") == "mirror":
-        args.append("--auto-delete")
+    if include_media_mode:
+        if profile.get("media_mode") == "mirror":
+            args.append("--auto-delete")
+        if profile.get("media_mode") == "move":
+            args.extend(["--keep-icloud-recent-days", "0"])
     if not profile.get("include_live_photos", True):
         args.append("--skip-live-photos")
     if profile.get("keep_unicode", True):
@@ -676,7 +681,7 @@ def run_auth_job(job: Job, profile_id: str, password: str) -> None:
     cookie_dir = profile_cookie_dir(profile)
     root.mkdir(parents=True, exist_ok=True)
     cookie_dir.mkdir(parents=True, exist_ok=True)
-    args = build_base_icloudpd_args(profile, root / "auth-check", cookie_dir, password=password)
+    args = build_base_icloudpd_args(profile, root / "auth-check", cookie_dir, password=password, include_media_mode=False)
     args.append("--auth-only")
     code = run_process(job, args)
     finish_job(job, "success" if code == 0 else "failed", return_code=code)
@@ -698,6 +703,8 @@ def run_media_job(job: Job, profile_id: str) -> None:
     cookie_dir = profile_cookie_dir(profile)
     root.mkdir(parents=True, exist_ok=True)
     cookie_dir.mkdir(parents=True, exist_ok=True)
+    if profile.get("media_mode") == "move":
+        job.append("危险模式: 本次同步成功后会请求删除 iCloud 云端对应媒体文件，请确认 NAS 已有备份。")
 
     commands: list[tuple[str, list[str]]] = []
     if profile.get("photos_enabled"):

@@ -11,6 +11,7 @@
 - 计划同步：按分钟间隔自动同步媒体文件。
 - 本地持久化：配置、Cookie、日志存在应用数据目录，下载结果存在 `shares/icloud`。
 - 目录可选：可在飞牛“应用设置”里把同步根目录切换到本应用已授权的任意目录。
+- 云端清理：可选高风险 Move 模式，媒体同步到 NAS 后删除 iCloud 云端对应照片/视频。
 
 ## 目录
 
@@ -60,7 +61,7 @@ chmod +x scripts/build-fpk.sh
 fnpack build --directory .
 ```
 
-成功后会在 `dist/` 里得到 `icloud-sync-0.2.1.fpk`。
+成功后会在 `dist/` 里得到当前版本的 `icloud-sync-*.fpk`。
 
 ## 使用
 
@@ -76,7 +77,8 @@ fnpack build --directory .
 
 - iCloud 照片/视频使用 `icloudpd==1.32.3`，这是 2026 年 5 月底修复新版 Apple 2FA 流程的版本。
 - 默认是 Copy 模式，只下载新增内容，不删除云端文件。
-- 「镜像本地删除」只会删除本地已从 iCloud 移除的文件，不会删除 iCloud 云端照片。
+- 「同步本地删除」只会删除 NAS 本地已从 iCloud 移除的文件，不会删除 iCloud 云端照片。
+- 「下载后删除 iCloud 云端」会在媒体同步成功后请求删除云端对应照片/视频；这是不可轻易回退的危险操作，启用前请确认 NAS 文件完整并已有其他备份。
 - 备忘录没有 Apple 官方稳定第三方同步 API。这里走 IMAP 导出，只在 iCloud Mail 能看到 Notes/备忘录文件夹时有效。
 - 如果需要计划同步但不保存 Apple ID 密码，Cookie 过期后需要重新手动认证。
 - 若 NAS 无法访问 Docker Hub 或 PyPI，首次启动依赖安装会失败；可改用自建镜像后再调整 `app/docker/docker-compose.yaml`。

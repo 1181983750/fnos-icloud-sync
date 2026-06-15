@@ -476,6 +476,32 @@ input[readonly] {
   line-height: 1.5;
 }
 
+.danger-note {
+  display: grid;
+  gap: 5px;
+  margin: 2px 0 14px;
+  padding: 12px 14px;
+  border: 1px solid #efb8ad;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #fff4f1, #fffaf6);
+  color: #7f2f23;
+  box-shadow: 0 12px 28px rgba(194, 65, 45, 0.08);
+}
+
+.danger-note strong {
+  color: #a13a2a;
+}
+
+.danger-note span {
+  color: #835349;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.hidden {
+  display: none !important;
+}
+
 .row {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

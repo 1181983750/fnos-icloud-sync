@@ -148,12 +148,19 @@
                     </select>
                   </div>
                   <div class="field">
-                    <label for="mediaMode">本地处理</label>
+                    <label for="mediaMode">同步模式</label>
                     <select id="mediaMode">
-                      <option value="copy">只下载新增</option>
-                      <option value="mirror">镜像本地删除</option>
+                      <option value="copy">保留云端：只下载新增</option>
+                      <option value="mirror">同步本地删除：云端删了，本地也删</option>
+                      <option value="move">下载后删除 iCloud 云端</option>
                     </select>
+                    <p class="field-help">默认只下载到 NAS，不改动 iCloud 云端。</p>
                   </div>
+                </div>
+
+                <div id="cloudDeleteWarning" class="danger-note hidden">
+                  <strong>危险操作：会删除 iCloud 云端原文件</strong>
+                  <span>选择“下载后删除 iCloud 云端”后，照片/视频同步成功时会请求从 iCloud 删除对应媒体。删除后可能进入 Apple 最近删除，请先确认 NAS 文件完整并已有备份。</span>
                 </div>
 
                 <div class="row">
