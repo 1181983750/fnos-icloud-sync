@@ -28,6 +28,24 @@ fnos-icloud-sync/
 └── scripts/
 ```
 
+## 模块说明
+
+每个源码模块目录都带有独立 `README.md`，用于说明职责、关键文件和维护注意事项。
+
+- `app/`：FPK 运行时应用目录，包含 Docker 服务、后端面板和桌面入口。
+- `app/docker/`：fnOS Docker 项目配置，负责启动 Python 容器和挂载数据目录。
+- `app/server/`：Flask 后端和 Web 面板静态资源，负责配置、认证、同步任务和状态接口。
+- `app/server/static/`：浏览器端页面、样式和交互脚本。
+- `app/server/wheels/`：离线 Python wheel 依赖，减少 NAS 首次启动下载等待。
+- `app/ui/`：fnOS 桌面入口和启动等待页。
+- `app/ui/images/`：桌面入口图标资源。
+- `cmd/`：FPK 安装、配置、卸载等生命周期脚本。
+- `config/`：FPK 资源、权限和应用共享目录声明。
+- `wizard/`：fnOS 安装/配置向导定义。
+- `scripts/`：本地构建辅助脚本。
+- `tools/`：本地构建工具放置目录。
+- `docs/`：上架、限制说明和维护文档。
+
 下载结果安装后位于：
 
 ```text
