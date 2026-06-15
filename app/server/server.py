@@ -528,9 +528,27 @@ def resolve_command(name: str) -> str | None:
     if resolved:
         return resolved
 
-    venv_candidate = Path(sys.executable).resolve().parent / name
-    if venv_candidate.exists():
-        return str(venv_candidate)
+    executable_names = [name]
+    if os.name == "nt" and not name.lower().endswith(".exe"):
+        executable_names.append(f"{name}.exe")
+
+    bin_dir = "Scripts" if os.name == "nt" else "bin"
+    candidate_dirs = [
+        Path(sys.executable).parent,
+        Path(sys.prefix) / bin_dir,
+    ]
+    if os.environ.get("VIRTUAL_ENV"):
+        candidate_dirs.append(Path(os.environ["VIRTUAL_ENV"]) / bin_dir)
+
+    seen: set[Path] = set()
+    for directory in candidate_dirs:
+        if directory in seen:
+            continue
+        seen.add(directory)
+        for executable_name in executable_names:
+            candidate = directory / executable_name
+            if candidate.exists():
+                return str(candidate)
 
     return None
 
@@ -951,6 +969,7 @@ def status_payload(profile_id: str | None = None) -> dict[str, Any]:
     profile = get_profile(config, profile_id)
     state = get_profile_state(profile["id"])
     storage_root = load_storage_root()
+    icloudpd_path = resolve_command("icloudpd")
     with job_lock:
         job = current_job.to_dict() if current_job else None
     storage = profile_storage_stats(profile)
@@ -972,7 +991,9 @@ def status_payload(profile_id: str | None = None) -> dict[str, Any]:
             "container_root": str(DATA_DIR),
             "restart_required": storage_root["selected_root_path"] != SYNC_ROOT_HOST_PATH,
         },
-        "icloudpd_available": command_exists("icloudpd"),
+        "icloudpd_available": icloudpd_path is not None,
+        "icloudpd_path": icloudpd_path or "",
+        "python_executable": sys.executable,
     }
 
 
