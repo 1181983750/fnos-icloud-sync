@@ -1,0 +1,7 @@
+{
+  "defaults": {
+    "run-as": "package"
+  },
+  "username": "docker-icloud-sync",
+  "groupname": "docker-icloud-sync"
+}

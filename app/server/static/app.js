@@ -1,0 +1,459 @@
+const fields = {
+  profileName: document.querySelector("#profileName"),
+  appleId: document.querySelector("#appleId"),
+  authPassword: document.querySelector("#authPassword"),
+  storePassword: document.querySelector("#storePassword"),
+  photosEnabled: document.querySelector("#photosEnabled"),
+  videosEnabled: document.querySelector("#videosEnabled"),
+  notesEnabled: document.querySelector("#notesEnabled"),
+  scheduleEnabled: document.querySelector("#scheduleEnabled"),
+  syncInterval: document.querySelector("#syncInterval"),
+  domain: document.querySelector("#domain"),
+  mediaMode: document.querySelector("#mediaMode"),
+  folderStructure: document.querySelector("#folderStructure"),
+  size: document.querySelector("#size"),
+  recent: document.querySelector("#recent"),
+  untilFound: document.querySelector("#untilFound"),
+  album: document.querySelector("#album"),
+  library: document.querySelector("#library"),
+  includeLivePhotos: document.querySelector("#includeLivePhotos"),
+  keepUnicode: document.querySelector("#keepUnicode"),
+  setExifDatetime: document.querySelector("#setExifDatetime"),
+  imapUser: document.querySelector("#imapUser"),
+  imapPassword: document.querySelector("#imapPassword"),
+  imapHost: document.querySelector("#imapHost"),
+  imapPort: document.querySelector("#imapPort"),
+  imapFolder: document.querySelector("#imapFolder"),
+  noteFormat: document.querySelector("#noteFormat"),
+};
+
+const els = {
+  form: document.querySelector("#configForm"),
+  addProfileBtn: document.querySelector("#addProfileBtn"),
+  deleteProfileBtn: document.querySelector("#deleteProfileBtn"),
+  profileList: document.querySelector("#profileList"),
+  activeProfileTitle: document.querySelector("#activeProfileTitle"),
+  authBtn: document.querySelector("#authBtn"),
+  mediaSyncBtn: document.querySelector("#mediaSyncBtn"),
+  notesSyncBtn: document.querySelector("#notesSyncBtn"),
+  stopJob: document.querySelector("#stopJob"),
+  sendInputBtn: document.querySelector("#sendInputBtn"),
+  consoleInput: document.querySelector("#consoleInput"),
+  logOutput: document.querySelector("#logOutput"),
+  jobStatus: document.querySelector("#jobStatus"),
+  toolStatus: document.querySelector("#toolStatus"),
+  photoCount: document.querySelector("#photoCount"),
+  videoCount: document.querySelector("#videoCount"),
+  noteCount: document.querySelector("#noteCount"),
+  dataPath: document.querySelector("#dataPath"),
+  lastSync: document.querySelector("#lastSync"),
+  toast: document.querySelector("#toast"),
+};
+
+let appState = {
+  config: null,
+  activeProfileId: "",
+};
+let toastTimer = null;
+
+function showToast(message) {
+  els.toast.textContent = message;
+  els.toast.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => els.toast.classList.remove("show"), 2600);
+}
+
+async function api(path, options = {}) {
+  const response = await fetch(path, {
+    headers: { "Content-Type": "application/json" },
+    ...options,
+  });
+  const payload = await response.json();
+  if (!response.ok) {
+    throw new Error(payload.error || "请求失败");
+  }
+  return payload;
+}
+
+function activeProfile() {
+  const profiles = appState.config?.profiles || [];
+  return profiles.find((item) => item.id === appState.activeProfileId) || profiles[0] || null;
+}
+
+function renderProfiles() {
+  const profiles = appState.config?.profiles || [];
+  els.profileList.innerHTML = "";
+  profiles.forEach((profile) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `profile-item${profile.id === appState.activeProfileId ? " active" : ""}`;
+    button.dataset.profileId = profile.id;
+
+    const title = document.createElement("strong");
+    title.textContent = profile.name || "未命名方案";
+    const account = document.createElement("span");
+    account.textContent = profile.apple_id || "未填写 Apple ID";
+    const flags = document.createElement("small");
+    const enabled = [];
+    if (profile.photos_enabled) enabled.push("照片");
+    if (profile.videos_enabled) enabled.push("视频");
+    if (profile.notes_enabled) enabled.push("备忘录");
+    flags.textContent = enabled.length ? enabled.join(" / ") : "未选择同步内容";
+
+    button.append(title, account, flags);
+    button.addEventListener("click", () => selectProfile(profile.id));
+    els.profileList.append(button);
+  });
+}
+
+function applyProfile(profile) {
+  if (!profile) {
+    return;
+  }
+  fields.profileName.value = profile.name || "";
+  fields.appleId.value = profile.apple_id || "";
+  fields.authPassword.value = "";
+  fields.storePassword.checked = Boolean(profile.store_password);
+  fields.photosEnabled.checked = Boolean(profile.photos_enabled);
+  fields.videosEnabled.checked = Boolean(profile.videos_enabled);
+  fields.notesEnabled.checked = Boolean(profile.notes_enabled);
+  fields.scheduleEnabled.checked = Boolean(profile.schedule_enabled);
+  fields.syncInterval.value = profile.sync_interval_minutes || 360;
+  fields.domain.value = profile.domain || "com";
+  fields.mediaMode.value = profile.media_mode || "copy";
+  fields.folderStructure.value = profile.folder_structure || "{:%Y/%m/%d}";
+  fields.size.value = profile.size || "original";
+  fields.recent.value = profile.recent || "";
+  fields.untilFound.value = profile.until_found || "";
+  fields.album.value = profile.album || "";
+  fields.library.value = profile.library || "";
+  fields.includeLivePhotos.checked = Boolean(profile.include_live_photos);
+  fields.keepUnicode.checked = Boolean(profile.keep_unicode);
+  fields.setExifDatetime.checked = Boolean(profile.set_exif_datetime);
+
+  const notes = profile.notes || {};
+  fields.imapUser.value = notes.username || "";
+  fields.imapPassword.value = "";
+  fields.imapHost.value = notes.host || "imap.mail.me.com";
+  fields.imapPort.value = notes.port || 993;
+  fields.imapFolder.value = notes.folder || "Notes";
+  fields.noteFormat.value = notes.format || "markdown";
+
+  els.activeProfileTitle.textContent = profile.name || "当前方案";
+  els.deleteProfileBtn.disabled = (appState.config?.profiles || []).length <= 1;
+  updateGuide();
+}
+
+function collectConfig(includePasswords = false) {
+  const payload = {
+    profile_id: appState.activeProfileId,
+    name: fields.profileName.value.trim() || "未命名方案",
+    apple_id: fields.appleId.value.trim(),
+    store_password: fields.storePassword.checked,
+    photos_enabled: fields.photosEnabled.checked,
+    videos_enabled: fields.videosEnabled.checked,
+    notes_enabled: fields.notesEnabled.checked,
+    schedule_enabled: fields.scheduleEnabled.checked,
+    sync_interval_minutes: fields.syncInterval.value,
+    domain: fields.domain.value,
+    media_mode: fields.mediaMode.value,
+    folder_structure: fields.folderStructure.value.trim(),
+    size: fields.size.value,
+    recent: fields.recent.value.trim(),
+    until_found: fields.untilFound.value.trim(),
+    album: fields.album.value.trim(),
+    library: fields.library.value.trim(),
+    include_live_photos: fields.includeLivePhotos.checked,
+    keep_unicode: fields.keepUnicode.checked,
+    set_exif_datetime: fields.setExifDatetime.checked,
+    notes: {
+      username: fields.imapUser.value.trim(),
+      host: fields.imapHost.value.trim(),
+      port: fields.imapPort.value.trim(),
+      folder: fields.imapFolder.value.trim(),
+      format: fields.noteFormat.value,
+    },
+  };
+
+  if (includePasswords) {
+    if (fields.authPassword.value) {
+      payload.password = fields.authPassword.value;
+    }
+    if (fields.imapPassword.value) {
+      payload.notes.password = fields.imapPassword.value;
+    }
+  }
+  return payload;
+}
+
+function setRunning(isRunning) {
+  els.authBtn.disabled = isRunning;
+  els.mediaSyncBtn.disabled = isRunning;
+  els.notesSyncBtn.disabled = isRunning;
+  els.stopJob.disabled = !isRunning;
+}
+
+function renderJob(job) {
+  const status = job?.status || "idle";
+  const labels = {
+    idle: "空闲",
+    running: "运行中",
+    success: "完成",
+    failed: "失败",
+    stopped: "已停止",
+  };
+  const profileName = job?.profile_name ? ` · ${job.profile_name}` : "";
+  els.jobStatus.textContent = `${labels[status] || status}${profileName}`;
+  els.jobStatus.className = "pill";
+  if (status === "failed" || status === "stopped") {
+    els.jobStatus.classList.add("error");
+  } else if (status === "running") {
+    els.jobStatus.classList.add("warn");
+  }
+  setRunning(status === "running");
+
+  if (Array.isArray(job?.log) && job.log.length) {
+    els.logOutput.textContent = job.log.join("\n");
+    els.logOutput.scrollTop = els.logOutput.scrollHeight;
+  }
+}
+
+function renderStatus(status) {
+  els.photoCount.textContent = status.counts?.photos ?? 0;
+  els.videoCount.textContent = status.counts?.videos ?? 0;
+  els.noteCount.textContent = status.counts?.notes ?? 0;
+  els.dataPath.textContent = status.paths?.data || "-";
+
+  els.toolStatus.textContent = status.icloudpd_available ? "icloudpd 就绪" : "依赖安装中";
+  els.toolStatus.className = status.icloudpd_available ? "pill" : "pill warn";
+
+  const lastMedia = status.state?.last_media_sync || "从未同步媒体";
+  const lastNotes = status.state?.last_notes_sync || "从未导出备忘录";
+  els.lastSync.textContent = `媒体: ${lastMedia} / 备忘录: ${lastNotes}`;
+  renderJob(status.job || { status: "idle", log: [] });
+  updateGuide();
+}
+
+function updateGuide() {
+  const hasAppleId = Boolean(fields.appleId.value.trim());
+  const hasScope = fields.photosEnabled.checked || fields.videosEnabled.checked || fields.notesEnabled.checked;
+  const jobText = els.jobStatus.textContent;
+
+  document.querySelector("#guideAccount").className = hasAppleId ? "done" : "active";
+  document.querySelector("#guideAuth").className = hasAppleId ? "active" : "";
+  document.querySelector("#guideScope").className = hasScope ? "done" : "";
+  document.querySelector("#guideRun").className = jobText.includes("运行中") || jobText.includes("完成") ? "done" : "";
+
+  if (!hasAppleId) {
+    document.querySelector("#guideHint").textContent = "先在当前方案里填写 Apple ID，再进行 iCloud 认证。";
+  } else if (!hasScope) {
+    document.querySelector("#guideHint").textContent = "至少选择照片、视频或备忘录中的一项。";
+  } else if (jobText.includes("运行中")) {
+    document.querySelector("#guideHint").textContent = "任务正在运行，进度会显示在下方日志里。";
+  } else {
+    document.querySelector("#guideHint").textContent = "保存当前方案后，先认证 iCloud，再启动同步任务。";
+  }
+}
+
+async function loadConfig() {
+  const config = await api("/api/config");
+  appState.config = config;
+  appState.activeProfileId = config.active_profile_id;
+  renderProfiles();
+  applyProfile(activeProfile());
+}
+
+async function refreshStatus() {
+  try {
+    const profileId = appState.activeProfileId ? `?profile_id=${encodeURIComponent(appState.activeProfileId)}` : "";
+    const status = await api(`/api/status${profileId}`);
+    renderStatus(status);
+  } catch (error) {
+    els.toolStatus.textContent = "服务未就绪";
+    els.toolStatus.className = "pill error";
+  }
+}
+
+async function saveCurrentProfile(includePasswords = true) {
+  const config = await api("/api/config", {
+    method: "POST",
+    body: JSON.stringify(collectConfig(includePasswords)),
+  });
+  appState.config = config;
+  appState.activeProfileId = config.active_profile_id;
+  renderProfiles();
+  applyProfile(activeProfile());
+  return config;
+}
+
+async function selectProfile(profileId) {
+  try {
+    const config = await api(`/api/profiles/${encodeURIComponent(profileId)}/select`, {
+      method: "POST",
+      body: "{}",
+    });
+    appState.config = config;
+    appState.activeProfileId = config.active_profile_id;
+    els.logOutput.textContent = "等待任务...";
+    renderProfiles();
+    applyProfile(activeProfile());
+    await refreshStatus();
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
+els.addProfileBtn.addEventListener("click", async () => {
+  try {
+    const config = await api("/api/profiles", {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    appState.config = config;
+    appState.activeProfileId = config.active_profile_id;
+    els.logOutput.textContent = "新方案已创建，请填写 Apple ID 并保存。";
+    renderProfiles();
+    applyProfile(activeProfile());
+    await refreshStatus();
+    showToast("已新增方案");
+  } catch (error) {
+    showToast(error.message);
+  }
+});
+
+els.deleteProfileBtn.addEventListener("click", async () => {
+  const profile = activeProfile();
+  if (!profile) {
+    return;
+  }
+  const confirmed = window.confirm(`删除方案“${profile.name}”？同步文件默认保留。`);
+  if (!confirmed) {
+    return;
+  }
+  try {
+    const config = await api(`/api/profiles/${encodeURIComponent(profile.id)}`, {
+      method: "DELETE",
+      body: JSON.stringify({ delete_data: false }),
+    });
+    appState.config = config;
+    appState.activeProfileId = config.active_profile_id;
+    els.logOutput.textContent = "等待任务...";
+    renderProfiles();
+    applyProfile(activeProfile());
+    await refreshStatus();
+    showToast("方案已删除");
+  } catch (error) {
+    showToast(error.message);
+  }
+});
+
+els.form.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  try {
+    await saveCurrentProfile(true);
+    fields.authPassword.value = "";
+    fields.imapPassword.value = "";
+    showToast("方案已保存");
+    await refreshStatus();
+  } catch (error) {
+    showToast(error.message);
+  }
+});
+
+[
+  fields.profileName,
+  fields.appleId,
+  fields.photosEnabled,
+  fields.videosEnabled,
+  fields.notesEnabled,
+].forEach((field) => field.addEventListener("input", updateGuide));
+
+els.authBtn.addEventListener("click", async () => {
+  try {
+    await saveCurrentProfile(true);
+    const job = await api("/api/auth", {
+      method: "POST",
+      body: JSON.stringify({
+        profile_id: appState.activeProfileId,
+        apple_id: fields.appleId.value.trim(),
+        password: fields.authPassword.value,
+        store_password: fields.storePassword.checked,
+      }),
+    });
+    fields.authPassword.value = "";
+    renderJob(job);
+    showToast("认证任务已开始");
+  } catch (error) {
+    showToast(error.message);
+  }
+});
+
+els.mediaSyncBtn.addEventListener("click", async () => {
+  try {
+    await saveCurrentProfile(true);
+    fields.authPassword.value = "";
+    const job = await api("/api/sync/media", {
+      method: "POST",
+      body: JSON.stringify({ profile_id: appState.activeProfileId }),
+    });
+    renderJob(job);
+    showToast("同步任务已开始");
+  } catch (error) {
+    showToast(error.message);
+  }
+});
+
+els.notesSyncBtn.addEventListener("click", async () => {
+  try {
+    await saveCurrentProfile(true);
+    fields.imapPassword.value = "";
+    const job = await api("/api/sync/notes", {
+      method: "POST",
+      body: JSON.stringify({ profile_id: appState.activeProfileId }),
+    });
+    renderJob(job);
+    showToast("备忘录导出已开始");
+  } catch (error) {
+    showToast(error.message);
+  }
+});
+
+els.sendInputBtn.addEventListener("click", async () => {
+  const value = els.consoleInput.value.trim();
+  if (!value) {
+    return;
+  }
+  try {
+    const job = await api("/api/job/input", {
+      method: "POST",
+      body: JSON.stringify({ value }),
+    });
+    els.consoleInput.value = "";
+    renderJob(job);
+  } catch (error) {
+    showToast(error.message);
+  }
+});
+
+els.consoleInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    els.sendInputBtn.click();
+  }
+});
+
+els.stopJob.addEventListener("click", async () => {
+  try {
+    const job = await api("/api/job/stop", { method: "POST", body: "{}" });
+    renderJob(job);
+    showToast("任务已停止");
+  } catch (error) {
+    showToast(error.message);
+  }
+});
+
+loadConfig()
+  .then(refreshStatus)
+  .catch((error) => showToast(error.message));
+
+setInterval(refreshStatus, 3000);

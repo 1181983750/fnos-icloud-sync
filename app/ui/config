@@ -1,0 +1,15 @@
+{
+  ".url": {
+    "icloud-sync.Application": {
+      "title": "iCloud 同步",
+      "icon": "images/icon_{0}.png",
+      "type": "iframe",
+      "protocol": "http",
+      "url": "/cgi/ThirdParty/icloud-sync/index.cgi",
+      "allUsers": false,
+      "control": {
+        "accessPerm": "readonly"
+      }
+    }
+  }
+}

@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>iCloud 同步</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">FNOS iCloud Sync</p>
+          <h1>iCloud 同步方案</h1>
+        </div>
+        <div class="status-strip">
+          <span id="jobStatus" class="pill">空闲</span>
+          <span id="toolStatus" class="pill neutral">检测中</span>
+        </div>
+      </header>
+
+      <div class="manager-layout">
+        <aside class="panel profile-panel" aria-label="同步方案列表">
+          <div class="panel-head">
+            <h2>同步方案</h2>
+            <button id="addProfileBtn" class="primary" type="button">新增</button>
+          </div>
+          <div id="profileList" class="profile-list"></div>
+        </aside>
+
+        <section class="detail-stack" aria-label="方案详情">
+          <section class="summary-grid" aria-label="同步概览">
+            <div class="metric">
+              <span>照片</span>
+              <strong id="photoCount">0</strong>
+            </div>
+            <div class="metric">
+              <span>视频</span>
+              <strong id="videoCount">0</strong>
+            </div>
+            <div class="metric">
+              <span>备忘录</span>
+              <strong id="noteCount">0</strong>
+            </div>
+            <div class="metric wide">
+              <span>数据目录</span>
+              <strong id="dataPath">-</strong>
+            </div>
+          </section>
+
+          <section id="guide" class="guide" aria-label="使用引导">
+            <div>
+              <h2 id="activeProfileTitle">当前方案</h2>
+              <p id="guideHint">按顺序完成 Apple ID、认证、同步内容和任务启动。</p>
+            </div>
+            <ol class="guide-steps">
+              <li id="guideAccount"><span>1</span>填写 Apple ID</li>
+              <li id="guideAuth"><span>2</span>认证 iCloud</li>
+              <li id="guideScope"><span>3</span>选择内容</li>
+              <li id="guideRun"><span>4</span>开始同步</li>
+            </ol>
+          </section>
+
+          <div class="layout">
+            <form id="configForm" class="panel">
+              <div class="panel-head">
+                <h2>方案详情</h2>
+                <div class="head-actions">
+                  <button id="deleteProfileBtn" class="ghost danger" type="button">删除</button>
+                  <button type="submit" class="primary">保存</button>
+                </div>
+              </div>
+
+              <div class="field">
+                <label for="profileName">方案名称</label>
+                <input id="profileName" placeholder="例如：个人 iCloud" />
+              </div>
+
+              <div class="field">
+                <label for="appleId">Apple ID</label>
+                <input id="appleId" name="appleId" autocomplete="username" placeholder="name@example.com" />
+              </div>
+
+              <div class="field two">
+                <label for="authPassword">Apple ID 密码</label>
+                <input id="authPassword" name="authPassword" type="password" autocomplete="current-password" placeholder="仅认证时使用" />
+                <label class="checkline">
+                  <input id="storePassword" type="checkbox" />
+                  <span>保存到本机配置，用于计划同步</span>
+                </label>
+              </div>
+
+              <fieldset class="switches">
+                <legend>同步内容</legend>
+                <label class="switch">
+                  <input id="photosEnabled" type="checkbox" />
+                  <span>照片</span>
+                </label>
+                <label class="switch">
+                  <input id="videosEnabled" type="checkbox" />
+                  <span>视频</span>
+                </label>
+                <label class="switch">
+                  <input id="notesEnabled" type="checkbox" />
+                  <span>备忘录</span>
+                </label>
+              </fieldset>
+
+              <div class="row">
+                <div class="field">
+                  <label for="domain">iCloud 区域</label>
+                  <select id="domain">
+                    <option value="com">iCloud.com</option>
+                    <option value="cn">iCloud 中国区</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="mediaMode">本地处理</label>
+                  <select id="mediaMode">
+                    <option value="copy">只下载新增</option>
+                    <option value="mirror">镜像本地删除</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="field">
+                  <label for="folderStructure">目录结构</label>
+                  <input id="folderStructure" placeholder="{:%Y/%m/%d}" />
+                </div>
+                <div class="field">
+                  <label for="size">照片尺寸</label>
+                  <select id="size">
+                    <option value="original">原始</option>
+                    <option value="medium">中等</option>
+                    <option value="thumb">缩略图</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="field">
+                  <label for="recent">最近天数</label>
+                  <input id="recent" inputmode="numeric" placeholder="留空表示全部" />
+                </div>
+                <div class="field">
+                  <label for="untilFound">连续已存在后停止</label>
+                  <input id="untilFound" inputmode="numeric" placeholder="留空不启用" />
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="field">
+                  <label for="album">相册</label>
+                  <input id="album" placeholder="留空表示全部" />
+                </div>
+                <div class="field">
+                  <label for="library">资料库</label>
+                  <input id="library" placeholder="Personal Library / Shared Library" />
+                </div>
+              </div>
+
+              <div class="inline-options">
+                <label class="checkline">
+                  <input id="scheduleEnabled" type="checkbox" />
+                  <span>启用计划同步</span>
+                </label>
+                <label class="checkline compact">
+                  <span>间隔分钟</span>
+                  <input id="syncInterval" inputmode="numeric" />
+                </label>
+              </div>
+
+              <div class="inline-options">
+                <label class="checkline">
+                  <input id="includeLivePhotos" type="checkbox" />
+                  <span>包含 Live Photo 视频</span>
+                </label>
+                <label class="checkline">
+                  <input id="keepUnicode" type="checkbox" />
+                  <span>保留中文文件名</span>
+                </label>
+                <label class="checkline">
+                  <input id="setExifDatetime" type="checkbox" />
+                  <span>写入 EXIF 时间</span>
+                </label>
+              </div>
+            </form>
+
+            <aside class="panel operations">
+              <div class="panel-head">
+                <h2>任务</h2>
+                <button id="stopJob" class="ghost" type="button">停止</button>
+              </div>
+              <div class="button-grid">
+                <button id="authBtn" class="primary" type="button">认证 iCloud</button>
+                <button id="mediaSyncBtn" type="button">同步照片/视频</button>
+                <button id="notesSyncBtn" type="button">导出备忘录</button>
+              </div>
+
+              <div class="input-line">
+                <input id="consoleInput" placeholder="验证码或控制台输入" />
+                <button id="sendInputBtn" type="button">发送</button>
+              </div>
+
+              <section class="notes-box">
+                <h3>备忘录 IMAP</h3>
+                <div class="field">
+                  <label for="imapUser">用户名</label>
+                  <input id="imapUser" autocomplete="username" placeholder="通常为 Apple ID" />
+                </div>
+                <div class="field">
+                  <label for="imapPassword">App 专用密码</label>
+                  <input id="imapPassword" type="password" autocomplete="current-password" placeholder="留空则保留现有密码" />
+                </div>
+                <div class="row">
+                  <div class="field">
+                    <label for="imapHost">服务器</label>
+                    <input id="imapHost" />
+                  </div>
+                  <div class="field narrow">
+                    <label for="imapPort">端口</label>
+                    <input id="imapPort" inputmode="numeric" />
+                  </div>
+                </div>
+                <div class="row">
+                  <div class="field">
+                    <label for="imapFolder">文件夹</label>
+                    <input id="imapFolder" />
+                  </div>
+                  <div class="field">
+                    <label for="noteFormat">格式</label>
+                    <select id="noteFormat">
+                      <option value="markdown">Markdown</option>
+                      <option value="html">HTML</option>
+                    </select>
+                  </div>
+                </div>
+              </section>
+            </aside>
+          </div>
+
+          <section class="panel log-panel">
+            <div class="panel-head">
+              <h2>运行日志</h2>
+              <span id="lastSync">-</span>
+            </div>
+            <pre id="logOutput">等待任务...</pre>
+          </section>
+        </section>
+      </div>
+    </main>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script src="/static/app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,50 @@
+[
+  {
+    "stepTitle": "同步范围",
+    "items": [
+      {
+        "type": "tips",
+        "helpText": "安装后请打开 iCloud 同步面板填写 Apple ID 并完成认证。照片和视频使用 icloudpd 一向下载到 NAS，本应用不会删除 iCloud 云端数据，除非你在面板里显式开启本地同步删除。"
+      },
+      {
+        "type": "switch",
+        "field": "wizard_enable_photos",
+        "label": "默认启用照片",
+        "initValue": "true"
+      },
+      {
+        "type": "switch",
+        "field": "wizard_enable_videos",
+        "label": "默认启用视频",
+        "initValue": "true"
+      },
+      {
+        "type": "switch",
+        "field": "wizard_enable_notes",
+        "label": "默认启用备忘录（实验性 IMAP 导出）",
+        "initValue": "false"
+      }
+    ]
+  },
+  {
+    "stepTitle": "数据与隐私",
+    "items": [
+      {
+        "type": "tips",
+        "helpText": "下载结果会保存到应用共享目录 icloud。Apple 登录 Cookie、可选保存的密码和运行日志保存在应用数据目录中，仅用于本机同步。若启用备忘录导出，请使用 Apple App 专用密码。"
+      },
+      {
+        "type": "switch",
+        "field": "wizard_acknowledge_privacy",
+        "label": "我了解凭据会保存在本机应用数据目录",
+        "initValue": "true",
+        "rules": [
+          {
+            "required": true,
+            "message": "请确认数据与隐私说明"
+          }
+        ]
+      }
+    ]
+  }
+]

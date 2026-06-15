@@ -1,0 +1,20 @@
+appname=icloud-sync
+version=0.2.1
+display_name=iCloud 同步
+desc=iCloud 照片、视频一向同步到飞牛 NAS，并提供实验性的备忘录 IMAP 导出。数据保存在本机应用共享目录中，凭据只写入本机持久化配置。
+platform=x86
+arch=x86_64
+source=thirdparty
+
+maintainer=local
+maintainer_url=https://developer.fnnas.com/
+distributor=local
+distributor_url=https://developer.fnnas.com/
+
+os_min_version=1.1.8
+desktop_uidir=ui
+desktop_applaunchname=icloud-sync.Application
+service_port=8080
+checkport=true
+disable_authorization_path=false
+changelog=0.2.1: 更新 iCloud 风格应用图标。0.2.0: 支持多 iCloud 同步方案，左侧方案列表，右侧方案详情，方案间隔离 Cookie、目录和状态。0.1.1: 桌面入口改为本地启动页，容器未启动时显示诊断而不是空白。0.1.0: 初始版本。

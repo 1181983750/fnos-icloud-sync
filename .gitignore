@@ -1,0 +1,7 @@
+dist/
+var/
+tools/fnpack*
+*.fpk
+*.log
+__pycache__/
+*.pyc

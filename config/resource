@@ -1,0 +1,22 @@
+{
+  "docker-project": {
+    "projects": [
+      {
+        "name": "icloud-sync",
+        "path": "docker"
+      }
+    ]
+  },
+  "data-share": {
+    "shares": [
+      {
+        "name": "icloud",
+        "permission": {
+          "rw": [
+            "docker-icloud-sync"
+          ]
+        }
+      }
+    ]
+  }
+}

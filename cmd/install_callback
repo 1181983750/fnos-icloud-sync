@@ -1,0 +1,11 @@
+#!/bin/bash
+
+mkdir -p "${TRIM_PKGVAR}/config" "${TRIM_PKGVAR}/logs"
+
+mkdir -p "/var/apps/${TRIM_APPNAME}/shares/icloud/photos" \
+         "/var/apps/${TRIM_APPNAME}/shares/icloud/videos" \
+         "/var/apps/${TRIM_APPNAME}/shares/icloud/notes"
+
+chmod +x "${TRIM_APPDEST}/ui/index.cgi" 2>/dev/null || true
+
+exit 0

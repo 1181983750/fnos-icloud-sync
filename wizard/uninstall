@@ -1,0 +1,29 @@
+[
+  {
+    "stepTitle": "卸载确认",
+    "items": [
+      {
+        "type": "radio",
+        "field": "wizard_remove_data",
+        "label": "应用数据",
+        "initValue": "keep",
+        "options": [
+          {
+            "label": "保留同步文件与配置",
+            "value": "keep"
+          },
+          {
+            "label": "删除同步文件、配置和日志",
+            "value": "delete"
+          }
+        ],
+        "rules": [
+          {
+            "required": true,
+            "message": "请选择卸载时如何处理数据"
+          }
+        ]
+      }
+    ]
+  }
+]
