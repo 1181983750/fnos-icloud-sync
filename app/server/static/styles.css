@@ -234,6 +234,11 @@ h3 {
   line-height: 1.55;
 }
 
+.guide-meta {
+  margin-top: 8px;
+  font-size: 12px;
+}
+
 .guide-steps {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -244,10 +249,15 @@ h3 {
 }
 
 .guide-steps li {
+  min-width: 0;
+}
+
+.guide-step {
+  width: 100%;
+  min-height: 44px;
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 38px;
   border: 1px solid var(--line);
   border-radius: 6px;
   padding: 7px 9px;
@@ -255,9 +265,15 @@ h3 {
   background: #fbfcfb;
   font-weight: 700;
   overflow-wrap: anywhere;
+  text-align: left;
+  transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease, transform 160ms ease;
 }
 
-.guide-steps li span {
+.guide-step strong {
+  font-size: 14px;
+}
+
+.guide-step span {
   display: grid;
   place-items: center;
   width: 22px;
@@ -269,20 +285,38 @@ h3 {
   font-size: 12px;
 }
 
-.guide-steps li.done {
+.guide-step.done {
   border-color: #b7d9cc;
   color: var(--green-deep);
   background: #f0faf5;
 }
 
-.guide-steps li.done span {
+.guide-step.done span {
   background: var(--green);
   color: #fff;
 }
 
-.guide-steps li.active {
+.guide-step.active {
   border-color: #9dc9b9;
   color: var(--text);
+  background: #ffffff;
+}
+
+.guide-step.current {
+  border-color: var(--green);
+  background: linear-gradient(180deg, #f8fdfb 0%, #eef8f3 100%);
+  box-shadow: 0 0 0 3px rgba(20, 121, 91, 0.12);
+  transform: translateY(-1px);
+}
+
+.guide-step.current span {
+  background: var(--green);
+  color: #fff;
+}
+
+.guide-step:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(20, 121, 91, 0.18);
 }
 
 .metric {
@@ -305,6 +339,14 @@ h3 {
   overflow-wrap: anywhere;
   font-size: 23px;
   font-weight: 800;
+}
+
+.metric small {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .metric.wide strong {
@@ -359,6 +401,45 @@ button.danger:hover {
   margin-bottom: 12px;
 }
 
+.section-label {
+  margin-bottom: 12px;
+  color: var(--green-deep);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.guide-section {
+  margin-bottom: 14px;
+  padding: 14px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfcfb 100%);
+  scroll-margin-top: 28px;
+  transition: border-color 180ms ease, box-shadow 180ms ease, background 180ms ease;
+}
+
+.guide-section-tight {
+  padding: 0;
+  background: transparent;
+}
+
+.guide-focus-target {
+  border-color: #9dc9b9;
+  background: linear-gradient(180deg, #fbfefc 0%, #f2faf6 100%);
+  box-shadow: 0 0 0 4px rgba(20, 121, 91, 0.1);
+  animation: guidePulse 1200ms ease;
+}
+
+@keyframes guidePulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(20, 121, 91, 0.22);
+  }
+  100% {
+    box-shadow: 0 0 0 4px rgba(20, 121, 91, 0.1);
+  }
+}
+
 .field label,
 legend {
   color: var(--muted);
@@ -382,6 +463,17 @@ input:focus,
 select:focus {
   border-color: var(--green);
   box-shadow: 0 0 0 3px rgba(20, 121, 91, 0.12);
+}
+
+input[readonly] {
+  background: #f6faf8;
+  color: #415249;
+}
+
+.field-help {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .row {

@@ -33,6 +33,15 @@ const els = {
   deleteProfileBtn: document.querySelector("#deleteProfileBtn"),
   profileList: document.querySelector("#profileList"),
   activeProfileTitle: document.querySelector("#activeProfileTitle"),
+  guideHint: document.querySelector("#guideHint"),
+  guideAccount: document.querySelector("#guideAccount"),
+  guideAuth: document.querySelector("#guideAuth"),
+  guideScope: document.querySelector("#guideScope"),
+  guideRun: document.querySelector("#guideRun"),
+  accountSection: document.querySelector("#accountSection"),
+  scopeSection: document.querySelector("#scopeSection"),
+  taskSection: document.querySelector("#taskSection"),
+  notesSection: document.querySelector("#notesSection"),
   authBtn: document.querySelector("#authBtn"),
   mediaSyncBtn: document.querySelector("#mediaSyncBtn"),
   notesSyncBtn: document.querySelector("#notesSyncBtn"),
@@ -46,13 +55,19 @@ const els = {
   videoCount: document.querySelector("#videoCount"),
   noteCount: document.querySelector("#noteCount"),
   dataPath: document.querySelector("#dataPath"),
+  dataPathMeta: document.querySelector("#dataPathMeta"),
+  syncRootDisplay: document.querySelector("#syncRootDisplay"),
+  syncRootHint: document.querySelector("#syncRootHint"),
   lastSync: document.querySelector("#lastSync"),
+  logPanel: document.querySelector(".log-panel"),
   toast: document.querySelector("#toast"),
 };
 
 let appState = {
   config: null,
   activeProfileId: "",
+  status: null,
+  selectedGuideStep: "",
 };
 let toastTimer = null;
 
@@ -78,6 +93,128 @@ async function api(path, options = {}) {
 function activeProfile() {
   const profiles = appState.config?.profiles || [];
   return profiles.find((item) => item.id === appState.activeProfileId) || profiles[0] || null;
+}
+
+const guideButtons = {
+  account: els.guideAccount,
+  auth: els.guideAuth,
+  scope: els.guideScope,
+  run: els.guideRun,
+};
+
+function preferredRunAction() {
+  if (fields.photosEnabled.checked || fields.videosEnabled.checked) {
+    return els.mediaSyncBtn;
+  }
+  return els.notesSyncBtn;
+}
+
+function guideTargets(step) {
+  const targets = {
+    account: {
+      sections: [els.accountSection],
+      focusEl: fields.appleId,
+      scrollEl: els.accountSection,
+    },
+    auth: {
+      sections: [els.accountSection, els.taskSection],
+      focusEl: fields.authPassword,
+      scrollEl: fields.authPassword,
+    },
+    scope: {
+      sections: [els.scopeSection, fields.notesEnabled.checked ? els.notesSection : null],
+      focusEl: fields.photosEnabled,
+      scrollEl: els.scopeSection,
+    },
+    run: {
+      sections: [els.taskSection, els.logPanel],
+      focusEl: preferredRunAction(),
+      scrollEl: els.taskSection,
+    },
+  };
+  return targets[step];
+}
+
+function clearGuideFocus() {
+  document.querySelectorAll(".guide-focus-target").forEach((item) => item.classList.remove("guide-focus-target"));
+}
+
+function applyGuideFocus(step, options = {}) {
+  const config = guideTargets(step);
+  if (!config) {
+    return;
+  }
+
+  clearGuideFocus();
+  config.sections.filter(Boolean).forEach((item) => item.classList.add("guide-focus-target"));
+
+  if (options.scroll && config.scrollEl) {
+    config.scrollEl.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  if (options.focus && config.focusEl) {
+    window.setTimeout(() => {
+      config.focusEl.focus({ preventScroll: true });
+      if ("select" in config.focusEl && typeof config.focusEl.select === "function" && config.focusEl.tagName === "INPUT") {
+        config.focusEl.select();
+      }
+    }, options.scroll ? 240 : 60);
+  }
+}
+
+function setGuideButtonState(button, state) {
+  button.className = "guide-step";
+  if (state.done) {
+    button.classList.add("done");
+  } else if (state.active) {
+    button.classList.add("active");
+  }
+  if (state.current) {
+    button.classList.add("current");
+    button.setAttribute("aria-current", "step");
+  } else {
+    button.removeAttribute("aria-current");
+  }
+}
+
+function guideState() {
+  const hasAppleId = Boolean(fields.appleId.value.trim());
+  const hasScope = fields.photosEnabled.checked || fields.videosEnabled.checked || fields.notesEnabled.checked;
+  const job = appState.status?.job || null;
+  const lastMediaSync = appState.status?.state?.last_media_sync || "";
+  const lastNotesSync = appState.status?.state?.last_notes_sync || "";
+  const hasSyncHistory = Boolean(lastMediaSync || lastNotesSync);
+  const authDone = Boolean((job?.kind === "auth" && job?.status === "success") || hasSyncHistory);
+  const runDone = Boolean(
+    (job?.kind && job.kind !== "auth" && (job.status === "running" || job.status === "success")) || hasSyncHistory
+  );
+
+  let recommendedStep = "account";
+  if (hasAppleId && !authDone) {
+    recommendedStep = "auth";
+  } else if (hasAppleId && authDone && !hasScope) {
+    recommendedStep = "scope";
+  } else if (hasAppleId && hasScope) {
+    recommendedStep = "run";
+  }
+
+  return {
+    hasAppleId,
+    hasScope,
+    authDone,
+    runDone,
+    recommendedStep,
+  };
+}
+
+function guideHintText(step) {
+  const hints = {
+    account: "先填写 Apple ID 和认证密码，保存后就可以开始认证。",
+    auth: "点“认证 iCloud”后，如果 Apple 要求验证码，在右侧输入框里直接发送。",
+    scope: "勾选这次要同步的内容，再决定目录结构、照片尺寸和是否计划同步。",
+    run: "认证完成后，点右侧按钮开始同步；下面日志会实时显示进度。",
+  };
+  return hints[step] || "按顺序完成 Apple ID、认证、同步内容和任务启动。";
 }
 
 function renderProfiles() {
@@ -219,10 +356,28 @@ function renderJob(job) {
 }
 
 function renderStatus(status) {
+  appState.status = status;
   els.photoCount.textContent = status.counts?.photos ?? 0;
   els.videoCount.textContent = status.counts?.videos ?? 0;
   els.noteCount.textContent = status.counts?.notes ?? 0;
-  els.dataPath.textContent = status.paths?.data || "-";
+
+  const selectedRoot = status.storage?.selected_root_path || status.paths?.data || "-";
+  const appliedRoot = status.storage?.applied_root_path || selectedRoot;
+  const authorizedCount = status.storage?.authorized_paths?.length ?? 0;
+  const restartRequired = Boolean(status.storage?.restart_required);
+  const rootMode = status.storage?.using_default_root ? "当前目标为应用共享目录" : "当前目标为飞牛已授权目录";
+  let rootHint = status.storage?.using_default_root
+    ? "如需切到任意目录，请到飞牛的应用设置里为本应用授权目录并选择。"
+    : `已检测到 ${authorizedCount} 个授权目录，可在飞牛应用设置里切换。`;
+
+  if (restartRequired) {
+    rootHint = `已选择新目录，但当前容器仍挂载在 ${appliedRoot}。请重启应用后生效。`;
+  }
+
+  els.dataPath.textContent = selectedRoot;
+  els.dataPathMeta.textContent = `${rootMode} · 当前生效 ${appliedRoot} · 容器内挂载 ${status.storage?.container_root || "/data"}`;
+  els.syncRootDisplay.value = selectedRoot;
+  els.syncRootHint.textContent = rootHint;
 
   els.toolStatus.textContent = status.icloudpd_available ? "icloudpd 就绪" : "依赖安装中";
   els.toolStatus.className = status.icloudpd_available ? "pill" : "pill warn";
@@ -234,25 +389,36 @@ function renderStatus(status) {
   updateGuide();
 }
 
-function updateGuide() {
-  const hasAppleId = Boolean(fields.appleId.value.trim());
-  const hasScope = fields.photosEnabled.checked || fields.videosEnabled.checked || fields.notesEnabled.checked;
-  const jobText = els.jobStatus.textContent;
+function updateGuide(options = {}) {
+  const state = guideState();
+  const currentStep = options.step || appState.selectedGuideStep || state.recommendedStep;
 
-  document.querySelector("#guideAccount").className = hasAppleId ? "done" : "active";
-  document.querySelector("#guideAuth").className = hasAppleId ? "active" : "";
-  document.querySelector("#guideScope").className = hasScope ? "done" : "";
-  document.querySelector("#guideRun").className = jobText.includes("运行中") || jobText.includes("完成") ? "done" : "";
+  setGuideButtonState(guideButtons.account, {
+    done: state.hasAppleId,
+    active: !state.hasAppleId,
+    current: currentStep === "account",
+  });
+  setGuideButtonState(guideButtons.auth, {
+    done: state.authDone,
+    active: state.recommendedStep === "auth",
+    current: currentStep === "auth",
+  });
+  setGuideButtonState(guideButtons.scope, {
+    done: state.hasScope,
+    active: state.recommendedStep === "scope",
+    current: currentStep === "scope",
+  });
+  setGuideButtonState(guideButtons.run, {
+    done: state.runDone,
+    active: state.recommendedStep === "run",
+    current: currentStep === "run",
+  });
 
-  if (!hasAppleId) {
-    document.querySelector("#guideHint").textContent = "先在当前方案里填写 Apple ID，再进行 iCloud 认证。";
-  } else if (!hasScope) {
-    document.querySelector("#guideHint").textContent = "至少选择照片、视频或备忘录中的一项。";
-  } else if (jobText.includes("运行中")) {
-    document.querySelector("#guideHint").textContent = "任务正在运行，进度会显示在下方日志里。";
-  } else {
-    document.querySelector("#guideHint").textContent = "保存当前方案后，先认证 iCloud，再启动同步任务。";
-  }
+  els.guideHint.textContent = guideHintText(currentStep);
+  applyGuideFocus(currentStep, {
+    scroll: Boolean(options.scroll),
+    focus: Boolean(options.focus),
+  });
 }
 
 async function loadConfig() {
@@ -288,6 +454,7 @@ async function saveCurrentProfile(includePasswords = true) {
 
 async function selectProfile(profileId) {
   try {
+    releaseGuideStep();
     const config = await api(`/api/profiles/${encodeURIComponent(profileId)}/select`, {
       method: "POST",
       body: "{}",
@@ -298,13 +465,24 @@ async function selectProfile(profileId) {
     renderProfiles();
     applyProfile(activeProfile());
     await refreshStatus();
+    updateGuide({ focus: true });
   } catch (error) {
     showToast(error.message);
   }
 }
 
+function selectGuideStep(step, options = {}) {
+  appState.selectedGuideStep = step;
+  updateGuide(options);
+}
+
+function releaseGuideStep() {
+  appState.selectedGuideStep = "";
+}
+
 els.addProfileBtn.addEventListener("click", async () => {
   try {
+    releaseGuideStep();
     const config = await api("/api/profiles", {
       method: "POST",
       body: JSON.stringify({}),
@@ -315,6 +493,7 @@ els.addProfileBtn.addEventListener("click", async () => {
     renderProfiles();
     applyProfile(activeProfile());
     await refreshStatus();
+    updateGuide({ focus: true });
     showToast("已新增方案");
   } catch (error) {
     showToast(error.message);
@@ -331,6 +510,7 @@ els.deleteProfileBtn.addEventListener("click", async () => {
     return;
   }
   try {
+    releaseGuideStep();
     const config = await api(`/api/profiles/${encodeURIComponent(profile.id)}`, {
       method: "DELETE",
       body: JSON.stringify({ delete_data: false }),
@@ -341,6 +521,7 @@ els.deleteProfileBtn.addEventListener("click", async () => {
     renderProfiles();
     applyProfile(activeProfile());
     await refreshStatus();
+    updateGuide({ focus: true });
     showToast("方案已删除");
   } catch (error) {
     showToast(error.message);
@@ -350,6 +531,7 @@ els.deleteProfileBtn.addEventListener("click", async () => {
 els.form.addEventListener("submit", async (event) => {
   event.preventDefault();
   try {
+    releaseGuideStep();
     await saveCurrentProfile(true);
     fields.authPassword.value = "";
     fields.imapPassword.value = "";
@@ -366,10 +548,29 @@ els.form.addEventListener("submit", async (event) => {
   fields.photosEnabled,
   fields.videosEnabled,
   fields.notesEnabled,
-].forEach((field) => field.addEventListener("input", updateGuide));
+  fields.authPassword,
+  fields.storePassword,
+  fields.domain,
+  fields.mediaMode,
+  fields.scheduleEnabled,
+  fields.syncInterval,
+  fields.imapUser,
+  fields.imapPassword,
+].forEach((field) => {
+  const eventName = field.type === "checkbox" || field.tagName === "SELECT" ? "change" : "input";
+  field.addEventListener(eventName, () => {
+    releaseGuideStep();
+    updateGuide();
+  });
+});
+
+Object.entries(guideButtons).forEach(([step, button]) => {
+  button.addEventListener("click", () => selectGuideStep(step, { step, scroll: true, focus: true }));
+});
 
 els.authBtn.addEventListener("click", async () => {
   try {
+    releaseGuideStep();
     await saveCurrentProfile(true);
     const job = await api("/api/auth", {
       method: "POST",
@@ -390,6 +591,7 @@ els.authBtn.addEventListener("click", async () => {
 
 els.mediaSyncBtn.addEventListener("click", async () => {
   try {
+    releaseGuideStep();
     await saveCurrentProfile(true);
     fields.authPassword.value = "";
     const job = await api("/api/sync/media", {
@@ -405,6 +607,7 @@ els.mediaSyncBtn.addEventListener("click", async () => {
 
 els.notesSyncBtn.addEventListener("click", async () => {
   try {
+    releaseGuideStep();
     await saveCurrentProfile(true);
     fields.imapPassword.value = "";
     const job = await api("/api/sync/notes", {
@@ -454,6 +657,7 @@ els.stopJob.addEventListener("click", async () => {
 
 loadConfig()
   .then(refreshStatus)
+  .then(() => updateGuide({ focus: true }))
   .catch((error) => showToast(error.message));
 
 setInterval(refreshStatus, 3000);

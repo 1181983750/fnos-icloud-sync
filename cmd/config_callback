@@ -1,2 +1,24 @@
 #!/bin/bash
+
+LOG_DIR="${TRIM_PKGVAR:-$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)/var}/logs"
+mkdir -p "$LOG_DIR" 2>/dev/null || true
+LOG_FILE="${LOG_DIR}/config_callback.log"
+
+{
+    . "$(cd "$(dirname "$0")" 2>/dev/null && pwd)/config_shared.sh"
+
+    load_accessible_paths
+    selected_root="$(normalize_selected_root "${wizard_sync_root_path:-}")"
+
+    mkdir -p "${TRIM_PKGVAR:-${PACKAGE_ROOT}/var}/config" "${TRIM_PKGVAR:-${PACKAGE_ROOT}/var}/logs" 2>/dev/null || true
+    mkdir -p "${DEFAULT_SYNC_ROOT}" 2>/dev/null || true
+
+    if [ "$selected_root" != "$DEFAULT_SYNC_ROOT" ]; then
+        mkdir -p "$selected_root" 2>/dev/null || true
+    fi
+
+    write_storage_root_json "$selected_root"
+    write_wizard_config "$selected_root"
+} >> "$LOG_FILE" 2>&1 || true
+
 exit 0

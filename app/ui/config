@@ -6,10 +6,9 @@
       "type": "iframe",
       "protocol": "http",
       "url": "/cgi/ThirdParty/icloud-sync/index.cgi",
-      "allUsers": false,
-      "control": {
-        "accessPerm": "readonly"
-      }
+      "showDesktop": true,
+      "allUsers": true,
+      "noDisplay": false
     }
   }
 }

@@ -1,10 +1,26 @@
 [
   {
-    "stepTitle": "入口配置",
+    "stepTitle": "存储位置",
     "items": [
       {
         "type": "tips",
-        "helpText": "详细同步选项请打开桌面图标进入 Web 面板设置。若修改了应用授权目录，请保存后重启应用，让容器重新挂载可访问路径。"
+        "helpText": "默认会使用应用共享目录作为同步根目录。若你已经在飞牛里为本应用授权了目录，打开应用设置时会自动出现可选项。"
+      },
+      {
+        "type": "text",
+        "field": "wizard_sync_root_path",
+        "label": "同步根目录路径",
+        "initValue": "/var/apps/icloud-sync/shares/icloud",
+        "rules": [
+          {
+            "required": true,
+            "message": "请选择同步根目录"
+          }
+        ]
+      },
+      {
+        "type": "tips",
+        "helpText": "详细同步选项请打开桌面图标进入 Web 面板设置。若修改了同步根目录，请保存后重启应用，让容器重新挂载新的目录。"
       }
     ]
   }

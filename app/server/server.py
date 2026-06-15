@@ -9,6 +9,7 @@ import re
 import shutil
 import signal
 import subprocess
+import sys
 import threading
 import time
 import uuid
@@ -29,11 +30,14 @@ DATA_DIR = Path(os.environ.get("APP_DATA_DIR", "./var/data")).resolve()
 LOG_DIR = Path(os.environ.get("APP_LOG_DIR", "./var/logs")).resolve()
 HOST = os.environ.get("APP_HOST", "0.0.0.0")
 PORT = int(os.environ.get("APP_PORT", "8080"))
+SYNC_ROOT_HOST_PATH = os.environ.get("SYNC_ROOT_HOST_PATH", "/var/apps/icloud-sync/shares/icloud")
 
 CONFIG_FILE = CONFIG_DIR / "config.json"
 STATE_FILE = CONFIG_DIR / "state.json"
+STORAGE_ROOT_FILE = CONFIG_DIR / "storage_root.json"
 COOKIE_ROOT = CONFIG_DIR / "cookies"
 MAX_LOG_LINES = 500
+STATS_CACHE_TTL_SECONDS = 30
 
 for path in (CONFIG_DIR, DATA_DIR, LOG_DIR, COOKIE_ROOT):
     path.mkdir(parents=True, exist_ok=True)
@@ -105,9 +109,18 @@ DEFAULT_STATE: dict[str, Any] = {
     },
 }
 
+DEFAULT_STORAGE_ROOT: dict[str, Any] = {
+    "selected_root_path": SYNC_ROOT_HOST_PATH,
+    "using_default_root": True,
+    "authorized_paths": [],
+    "updated_at": "",
+}
+
 config_lock = threading.RLock()
 job_lock = threading.RLock()
+stats_lock = threading.RLock()
 current_job: "Job | None" = None
+stats_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 
 
 @dataclass
@@ -429,6 +442,27 @@ def save_state(state: dict[str, Any]) -> None:
         write_json(STATE_FILE, state)
 
 
+def load_storage_root() -> dict[str, Any]:
+    raw = read_json(STORAGE_ROOT_FILE, DEFAULT_STORAGE_ROOT)
+    selected_root_path = str(raw.get("selected_root_path") or SYNC_ROOT_HOST_PATH).strip() or SYNC_ROOT_HOST_PATH
+    authorized_paths = raw.get("authorized_paths", [])
+    if not isinstance(authorized_paths, list):
+        authorized_paths = []
+
+    normalized_paths: list[str] = []
+    for item in authorized_paths:
+        text = str(item or "").strip()
+        if text:
+            normalized_paths.append(text)
+
+    return {
+        "selected_root_path": selected_root_path,
+        "using_default_root": bool(raw.get("using_default_root", selected_root_path == SYNC_ROOT_HOST_PATH)),
+        "authorized_paths": normalized_paths,
+        "updated_at": str(raw.get("updated_at") or ""),
+    }
+
+
 def get_profile_state(profile_id: str) -> dict[str, Any]:
     state = load_state()
     return merge_dicts(deep_copy(DEFAULT_PROFILE_STATE), state.get("profiles", {}).get(profile_id, {}))
@@ -484,12 +518,25 @@ def finish_job(job: Job, status: str, return_code: int | None = None, error: str
     job.ended_at = utc_now()
     job.return_code = return_code
     job.error = error
+    clear_profile_stats(job.profile_id)
     if error:
         job.append(f"错误: {error}")
 
 
+def resolve_command(name: str) -> str | None:
+    resolved = shutil.which(name)
+    if resolved:
+        return resolved
+
+    venv_candidate = Path(sys.executable).resolve().parent / name
+    if venv_candidate.exists():
+        return str(venv_candidate)
+
+    return None
+
+
 def command_exists(name: str) -> bool:
-    return shutil.which(name) is not None
+    return resolve_command(name) is not None
 
 
 def build_base_icloudpd_args(
@@ -499,7 +546,7 @@ def build_base_icloudpd_args(
     password: str = "",
 ) -> list[str]:
     args = [
-        "icloudpd",
+        resolve_command("icloudpd") or "icloudpd",
         "--directory",
         str(directory),
         "--username",
@@ -844,6 +891,46 @@ def directory_size(path: Path) -> int:
     return total
 
 
+def collect_profile_storage_stats(profile: dict[str, Any]) -> dict[str, Any]:
+    root = profile_data_dir(profile)
+    photos_dir = root / "photos"
+    videos_dir = root / "videos"
+    notes_dir = root / "notes"
+    return {
+        "paths": {
+            "data": str(root),
+            "photos": str(photos_dir),
+            "videos": str(videos_dir),
+            "notes": str(notes_dir),
+        },
+        "counts": {
+            "photos": file_count(photos_dir),
+            "videos": file_count(videos_dir),
+            "notes": file_count(notes_dir),
+        },
+        "bytes": directory_size(root),
+    }
+
+
+def profile_storage_stats(profile: dict[str, Any]) -> dict[str, Any]:
+    profile_id = profile["id"]
+    now = time.time()
+    with stats_lock:
+        cached = stats_cache.get(profile_id)
+        if cached and now - cached[0] < STATS_CACHE_TTL_SECONDS:
+            return deep_copy(cached[1])
+
+    stats = collect_profile_storage_stats(profile)
+    with stats_lock:
+        stats_cache[profile_id] = (now, deep_copy(stats))
+    return stats
+
+
+def clear_profile_stats(profile_id: str) -> None:
+    with stats_lock:
+        stats_cache.pop(profile_id, None)
+
+
 def profile_summary(profile: dict[str, Any]) -> dict[str, Any]:
     state = get_profile_state(profile["id"])
     return {
@@ -863,30 +950,28 @@ def status_payload(profile_id: str | None = None) -> dict[str, Any]:
     config = load_config()
     profile = get_profile(config, profile_id)
     state = get_profile_state(profile["id"])
+    storage_root = load_storage_root()
     with job_lock:
         job = current_job.to_dict() if current_job else None
-    root = profile_data_dir(profile)
-    photos_dir = root / "photos"
-    videos_dir = root / "videos"
-    notes_dir = root / "notes"
+    storage = profile_storage_stats(profile)
     return {
         "active_profile_id": config["active_profile_id"],
         "profile_id": profile["id"],
         "profiles": [profile_summary(item) for item in config.get("profiles", [])],
         "state": state,
         "job": job,
-        "paths": {
-            "data": str(root),
-            "photos": str(photos_dir),
-            "videos": str(videos_dir),
-            "notes": str(notes_dir),
+        "paths": storage["paths"],
+        "counts": storage["counts"],
+        "bytes": storage["bytes"],
+        "storage": {
+            "selected_root_path": storage_root["selected_root_path"],
+            "applied_root_path": SYNC_ROOT_HOST_PATH,
+            "using_default_root": storage_root["using_default_root"],
+            "authorized_paths": storage_root["authorized_paths"],
+            "updated_at": storage_root["updated_at"],
+            "container_root": str(DATA_DIR),
+            "restart_required": storage_root["selected_root_path"] != SYNC_ROOT_HOST_PATH,
         },
-        "counts": {
-            "photos": file_count(photos_dir),
-            "videos": file_count(videos_dir),
-            "notes": file_count(notes_dir),
-        },
-        "bytes": directory_size(root),
         "icloudpd_available": command_exists("icloudpd"),
     }
 
@@ -976,6 +1061,9 @@ def api_delete_profile(profile_id: str):
         if config["active_profile_id"] == profile_id:
             config["active_profile_id"] = config["profiles"][0]["id"]
         write_json(CONFIG_FILE, config)
+        state = load_state()
+        state.setdefault("profiles", {}).pop(profile_id, None)
+        save_state(state)
 
     if payload.get("delete_data"):
         for path in (profile_data_dir(profile), profile_cookie_dir(profile)):
@@ -985,6 +1073,7 @@ def api_delete_profile(profile_id: str):
                     shutil.rmtree(resolved)
             except OSError:
                 pass
+    clear_profile_stats(profile_id)
     return jsonify(public_config(load_config()))
 
 

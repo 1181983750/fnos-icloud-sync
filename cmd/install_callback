@@ -8,4 +8,78 @@ mkdir -p "/var/apps/${TRIM_APPNAME}/shares/icloud/photos" \
 
 chmod +x "${TRIM_APPDEST}/ui/index.cgi" 2>/dev/null || true
 
+json_bool() {
+    if [ "$1" = "true" ]; then
+        printf "true"
+    else
+        printf "false"
+    fi
+}
+
+CONFIG_FILE="${TRIM_PKGVAR}/config/config.json"
+STATE_FILE="${TRIM_PKGVAR}/config/state.json"
+
+if [ ! -f "${CONFIG_FILE}" ]; then
+    photos_enabled="$(json_bool "${wizard_enable_photos:-true}")"
+    videos_enabled="$(json_bool "${wizard_enable_videos:-true}")"
+    notes_enabled="$(json_bool "${wizard_enable_notes:-false}")"
+
+    cat > "${CONFIG_FILE}" <<EOF
+{
+  "schema_version": 2,
+  "active_profile_id": "default",
+  "profiles": [
+    {
+      "id": "default",
+      "name": "默认方案",
+      "data_subdir": "",
+      "apple_id": "",
+      "store_password": false,
+      "password": "",
+      "photos_enabled": ${photos_enabled},
+      "videos_enabled": ${videos_enabled},
+      "notes_enabled": ${notes_enabled},
+      "schedule_enabled": false,
+      "sync_interval_minutes": 360,
+      "domain": "com",
+      "folder_structure": "{:%Y/%m/%d}",
+      "media_mode": "copy",
+      "recent": "",
+      "until_found": "",
+      "album": "",
+      "library": "",
+      "size": "original",
+      "include_live_photos": true,
+      "keep_unicode": true,
+      "set_exif_datetime": true,
+      "notes": {
+        "host": "imap.mail.me.com",
+        "port": 993,
+        "username": "",
+        "password": "",
+        "folder": "Notes",
+        "format": "markdown",
+        "limit": 0
+      }
+    }
+  ]
+}
+EOF
+fi
+
+if [ ! -f "${STATE_FILE}" ]; then
+    cat > "${STATE_FILE}" <<'EOF'
+{
+  "schema_version": 2,
+  "profiles": {
+    "default": {
+      "last_media_sync": "",
+      "last_notes_sync": "",
+      "last_scheduler_check": ""
+    }
+  }
+}
+EOF
+fi
+
 exit 0

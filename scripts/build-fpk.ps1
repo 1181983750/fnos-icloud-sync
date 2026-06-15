@@ -35,7 +35,8 @@ if (-not $FnpackBin -or -not (Test-Path $FnpackBin)) {
 }
 
 New-Item -ItemType Directory -Force -Path $DistDir | Out-Null
-Remove-Item -Force -ErrorAction SilentlyContinue (Join-Path $ProjectDir "*.fpk")
+Get-ChildItem -Path $ProjectDir -Filter '*.fpk' -File -ErrorAction SilentlyContinue |
+  Remove-Item -Force -ErrorAction SilentlyContinue
 
 Push-Location $ProjectDir
 try {

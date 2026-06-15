@@ -1,10 +1,9 @@
 #!/bin/bash
 
 if [ "${wizard_remove_data}" = "delete" ]; then
+    SHARE_ROOT="/var/apps/${TRIM_APPNAME}/shares/icloud"
     rm -rf "${TRIM_PKGVAR:?}/config" "${TRIM_PKGVAR:?}/logs"
-    rm -rf "/var/apps/${TRIM_APPNAME}/shares/icloud/photos" \
-           "/var/apps/${TRIM_APPNAME}/shares/icloud/videos" \
-           "/var/apps/${TRIM_APPNAME}/shares/icloud/notes"
+    rm -rf "${SHARE_ROOT}"
 fi
 
 exit 0

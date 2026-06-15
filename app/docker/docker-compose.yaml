@@ -11,13 +11,19 @@ services:
       - -c
       - |
         set -e
-        mkdir -p /config /data /logs
-        if [ ! -x /config/venv/bin/python ] || [ ! -f /config/venv/.icloud-sync-0.2.1 ]; then
+        mkdir -p /config /data /logs /tmp/pip-cache
+        export PIP_CACHE_DIR="${PIP_CACHE_DIR:-/tmp/pip-cache}"
+        export PIP_DISABLE_PIP_VERSION_CHECK=1
+        if [ ! -x /config/venv/bin/python ] || [ ! -f /config/venv/.icloud-sync-0.2.16 ]; then
           python -m venv /config/venv
-          /config/venv/bin/pip install --no-cache-dir --upgrade pip
-          /config/venv/bin/pip install --no-cache-dir -r /opt/icloud-sync/requirements.txt
-          touch /config/venv/.icloud-sync-0.2.1
+          if find /opt/icloud-sync/wheels -maxdepth 1 -name '*.whl' 2>/dev/null | grep -q .; then
+            /config/venv/bin/pip install --no-index --find-links /opt/icloud-sync/wheels -r /opt/icloud-sync/requirements.txt
+          else
+            /config/venv/bin/pip install --prefer-binary --retries 8 --timeout 120 -r /opt/icloud-sync/requirements.txt
+          fi
+          touch /config/venv/.icloud-sync-0.2.16
         fi
+        export PATH="/config/venv/bin:${PATH}"
         exec /config/venv/bin/python /opt/icloud-sync/server.py
     environment:
       APP_HOST: "0.0.0.0"
@@ -25,12 +31,15 @@ services:
       APP_CONFIG_DIR: "/config"
       APP_DATA_DIR: "/data"
       APP_LOG_DIR: "/logs"
+      SYNC_ROOT_HOST_PATH: "${wizard_sync_root_path:-/var/apps/icloud-sync/shares/icloud}"
       TZ: "Asia/Shanghai"
       PYTHONUNBUFFERED: "1"
+      PIP_INDEX_URL: "https://mirrors.aliyun.com/pypi/simple"
+      PIP_DEFAULT_TIMEOUT: "120"
     ports:
       - "${TRIM_SERVICE_PORT}:8080"
     volumes:
       - "${TRIM_APPDEST}/server:/opt/icloud-sync:ro"
       - "${TRIM_PKGVAR}/config:/config"
       - "${TRIM_PKGVAR}/logs:/logs"
-      - "/var/apps/icloud-sync/shares/icloud:/data"
+      - "${wizard_sync_root_path:-/var/apps/icloud-sync/shares/icloud}:/data"
