@@ -4,15 +4,15 @@
 
 - 应用名称：iCloud 同步
 - 应用包名：icloud-sync
-- 当前版本：0.2.19
+- 当前版本：0.2.20
 - 应用类型：Docker 型 FPK 应用
 - 支持平台：x86_64
 - 最低系统版本：fnOS 1.1.8
 - 服务端口：8080
 - GitHub 仓库：https://github.com/1181983750/fnos-icloud-sync
-- Release 地址：https://github.com/1181983750/fnos-icloud-sync/releases/tag/v0.2.19
-- FPK 下载地址：https://github.com/1181983750/fnos-icloud-sync/releases/download/v0.2.19/icloud-sync-0.2.19.fpk
-- FPK SHA256：8762FC5FB4E921227ADEBD4C6662699713C06E48EA6D32ED388A4B1D780126D9
+- Release 地址：https://github.com/1181983750/fnos-icloud-sync/releases/tag/v0.2.20
+- FPK 下载地址：https://github.com/1181983750/fnos-icloud-sync/releases/download/v0.2.20/icloud-sync-0.2.20.fpk
+- FPK SHA256：6E12F59836CECA25CE97370666BB800B88BA77BBDFEA84D76396CF9C5B13C9A2
 
 ## 应用简介
 
@@ -54,7 +54,7 @@ iCloud 同步是在飞牛 NAS 上运行的 iCloud 数据同步工具。应用通
 
 ## 审核测试建议
 
-1. 在 fnOS 应用中心手动安装 `icloud-sync-0.2.19.fpk`。
+1. 在 fnOS 应用中心手动安装 `icloud-sync-0.2.20.fpk`。
 2. 启动应用，确认桌面入口可打开启动检测页。
 3. 等待容器启动完成，进入 iCloud 同步面板。
 4. 打开 `/api/status`，确认 `icloudpd_available` 为 `true`，并能看到 `icloudpd_path`。
@@ -66,4 +66,4 @@ iCloud 同步是在飞牛 NAS 上运行的 iCloud 数据同步工具。应用通
 
 ## Release 说明
 
-0.2.19 优化了应用描述和同步模式说明，并新增高风险 Move 模式。用户可以手动选择“下载后删除 iCloud 云端”，媒体同步到 NAS 成功后请求删除云端对应照片/视频；该模式默认关闭，并在保存和运行同步前要求二次确认。
+0.2.20 移除了同步面板顶部的依赖状态徽标。进入面板代表 Web 后端已经就绪，页面只保留任务状态，避免后端已运行时仍显示“依赖安装中”造成误解。

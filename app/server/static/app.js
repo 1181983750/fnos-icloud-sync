@@ -50,7 +50,6 @@ const els = {
   consoleInput: document.querySelector("#consoleInput"),
   logOutput: document.querySelector("#logOutput"),
   jobStatus: document.querySelector("#jobStatus"),
-  toolStatus: document.querySelector("#toolStatus"),
   photoCount: document.querySelector("#photoCount"),
   videoCount: document.querySelector("#videoCount"),
   noteCount: document.querySelector("#noteCount"),
@@ -399,9 +398,6 @@ function renderStatus(status) {
   els.syncRootDisplay.value = selectedRoot;
   els.syncRootHint.textContent = rootHint;
 
-  els.toolStatus.textContent = status.icloudpd_available ? "icloudpd 就绪" : "依赖安装中";
-  els.toolStatus.className = status.icloudpd_available ? "pill" : "pill warn";
-
   const lastMedia = status.state?.last_media_sync || "从未同步媒体";
   const lastNotes = status.state?.last_notes_sync || "从未导出备忘录";
   els.lastSync.textContent = `媒体: ${lastMedia} / 备忘录: ${lastNotes}`;
@@ -455,8 +451,8 @@ async function refreshStatus() {
     const status = await api(`/api/status${profileId}`);
     renderStatus(status);
   } catch (error) {
-    els.toolStatus.textContent = "服务未就绪";
-    els.toolStatus.className = "pill error";
+    els.jobStatus.textContent = "服务未连接";
+    els.jobStatus.className = "pill error";
   }
 }
 
