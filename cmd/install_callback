@@ -6,8 +6,6 @@ mkdir -p "/var/apps/${TRIM_APPNAME}/shares/icloud/photos" \
          "/var/apps/${TRIM_APPNAME}/shares/icloud/videos" \
          "/var/apps/${TRIM_APPNAME}/shares/icloud/notes"
 
-chmod +x "${TRIM_APPDEST}/ui/index.cgi" 2>/dev/null || true
-
 json_bool() {
     if [ "$1" = "true" ]; then
         printf "true"

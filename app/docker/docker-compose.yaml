@@ -14,17 +14,17 @@ services:
         mkdir -p /config /data /logs /tmp/pip-cache
         export PIP_CACHE_DIR="${PIP_CACHE_DIR:-/tmp/pip-cache}"
         export PIP_DISABLE_PIP_VERSION_CHECK=1
-        if [ ! -x /config/venv/bin/python ] || [ ! -f /config/venv/.icloud-sync-0.2.16 ]; then
+        if [ ! -x /config/venv/bin/python ] || [ ! -f /config/venv/.icloud-sync-0.2.21 ]; then
           python -m venv /config/venv
           if find /opt/icloud-sync/wheels -maxdepth 1 -name '*.whl' 2>/dev/null | grep -q .; then
             /config/venv/bin/pip install --no-index --find-links /opt/icloud-sync/wheels -r /opt/icloud-sync/requirements.txt
           else
             /config/venv/bin/pip install --prefer-binary --retries 8 --timeout 120 -r /opt/icloud-sync/requirements.txt
           fi
-          touch /config/venv/.icloud-sync-0.2.16
+          touch /config/venv/.icloud-sync-0.2.21
         fi
         export PATH="/config/venv/bin:${PATH}"
-        exec /config/venv/bin/python /opt/icloud-sync/server.py
+        exec /config/venv/bin/waitress-serve --host="${APP_HOST:-0.0.0.0}" --port="${APP_PORT:-8080}" server:app
     environment:
       APP_HOST: "0.0.0.0"
       APP_PORT: "8080"
