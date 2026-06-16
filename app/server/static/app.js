@@ -1,6 +1,8 @@
 const fields = {
   profileName: document.querySelector("#profileName"),
   appleId: document.querySelector("#appleId"),
+  profileSubdir: document.querySelector("#profileSubdir"),
+  profilePathPreview: document.querySelector("#profilePathPreview"),
   authPassword: document.querySelector("#authPassword"),
   storePassword: document.querySelector("#storePassword"),
   photosEnabled: document.querySelector("#photosEnabled"),
@@ -95,6 +97,43 @@ async function api(path, options = {}) {
 function activeProfile() {
   const profiles = appState.config?.profiles || [];
   return profiles.find((item) => item.id === appState.activeProfileId) || profiles[0] || null;
+}
+
+function cleanRelativePath(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\\/g, "/")
+    .replace(/\/+/g, "/")
+    .replace(/^\/+|\/+$/g, "")
+    .split("/")
+    .map((part) => part.trim())
+    .filter((part) => part && part !== "." && part !== "..")
+    .join("/");
+}
+
+function joinDisplayPath(root, subdir) {
+  const base = String(root || "").replace(/[\\/]+$/g, "");
+  const relative = cleanRelativePath(subdir);
+  if (!base) {
+    return relative || "-";
+  }
+  return relative ? `${base}/${relative}` : base;
+}
+
+function currentProfileSubdir() {
+  const profile = activeProfile();
+  return cleanRelativePath(fields.profileSubdir.value || profile?.data_subdir || "");
+}
+
+function updateProfilePathPreview(status = appState.status) {
+  const root =
+    status?.storage?.applied_root_path ||
+    status?.storage?.selected_root_path ||
+    status?.storage?.container_root ||
+    "";
+  const preview = joinDisplayPath(root, currentProfileSubdir());
+  fields.profilePathPreview.value = preview;
+  return preview;
 }
 
 const guideButtons = {
@@ -253,7 +292,8 @@ function renderProfiles() {
     if (profile.photos_enabled) enabled.push("照片");
     if (profile.videos_enabled) enabled.push("视频");
     if (profile.notes_enabled) enabled.push("备忘录");
-    flags.textContent = enabled.length ? enabled.join(" / ") : "未选择同步内容";
+    const folder = cleanRelativePath(profile.data_subdir) || "根目录";
+    flags.textContent = `${enabled.length ? enabled.join(" / ") : "未选择同步内容"} · ${folder}`;
 
     button.append(title, account, flags);
     button.addEventListener("click", () => selectProfile(profile.id));
@@ -267,6 +307,8 @@ function applyProfile(profile) {
   }
   fields.profileName.value = profile.name || "";
   fields.appleId.value = profile.apple_id || "";
+  fields.profileSubdir.value = profile.data_subdir || "";
+  updateProfilePathPreview();
   fields.authPassword.value = "";
   fields.storePassword.checked = Boolean(profile.store_password);
   fields.photosEnabled.checked = Boolean(profile.photos_enabled);
@@ -304,6 +346,7 @@ function collectConfig(includePasswords = false) {
   const payload = {
     profile_id: appState.activeProfileId,
     name: fields.profileName.value.trim() || "未命名方案",
+    data_subdir: cleanRelativePath(fields.profileSubdir.value),
     apple_id: fields.appleId.value.trim(),
     store_password: fields.storePassword.checked,
     photos_enabled: fields.photosEnabled.checked,
@@ -393,8 +436,9 @@ function renderStatus(status) {
     rootHint = `已选择新目录，但当前容器仍挂载在 ${appliedRoot}。请重启应用后生效。`;
   }
 
-  els.dataPath.textContent = selectedRoot;
-  els.dataPathMeta.textContent = `${rootMode} · 当前生效 ${appliedRoot} · 容器内挂载 ${status.storage?.container_root || "/data"}`;
+  const profilePath = updateProfilePathPreview(status);
+  els.dataPath.textContent = profilePath;
+  els.dataPathMeta.textContent = `${rootMode} · 应用根目录 ${appliedRoot} · 容器内当前目录 ${status.paths?.data || "-"}`;
   els.syncRootDisplay.value = selectedRoot;
   els.syncRootHint.textContent = rootHint;
 
@@ -575,6 +619,7 @@ els.form.addEventListener("submit", async (event) => {
 [
   fields.profileName,
   fields.appleId,
+  fields.profileSubdir,
   fields.photosEnabled,
   fields.videosEnabled,
   fields.notesEnabled,
@@ -590,6 +635,9 @@ els.form.addEventListener("submit", async (event) => {
   const eventName = field.type === "checkbox" || field.tagName === "SELECT" ? "change" : "input";
   field.addEventListener(eventName, () => {
     releaseGuideStep();
+    if (field === fields.profileSubdir) {
+      updateProfilePathPreview();
+    }
     updateGuide();
   });
 });

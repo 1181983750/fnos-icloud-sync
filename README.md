@@ -10,6 +10,7 @@
 - 2FA 输入：认证时可在面板里发送 Apple 双重认证验证码。
 - 计划同步：按分钟间隔自动同步媒体文件。
 - 本地持久化：配置、Cookie、日志存在应用数据目录，下载结果存在 `shares/icloud`。
+- 多账号目录隔离：每个同步方案都可以设置自己的保存文件夹。
 - 目录可选：可在飞牛“应用设置”里把同步根目录切换到本应用已授权的任意目录。
 - 云端清理：可选高风险 Move 模式，媒体同步到 NAS 后删除 iCloud 云端对应照片/视频。
 
@@ -46,12 +47,12 @@ fnos-icloud-sync/
 - `tools/`：本地构建工具放置目录。
 - `docs/`：上架、限制说明和维护文档。
 
-下载结果安装后位于：
+下载结果安装后位于同步根目录下。每个方案可以设置自己的相对文件夹，例如：
 
 ```text
-/var/apps/icloud-sync/shares/icloud/photos
-/var/apps/icloud-sync/shares/icloud/videos
-/var/apps/icloud-sync/shares/icloud/notes
+/var/apps/icloud-sync/shares/icloud/<方案文件夹>/photos
+/var/apps/icloud-sync/shares/icloud/<方案文件夹>/videos
+/var/apps/icloud-sync/shares/icloud/<方案文件夹>/notes
 ```
 
 ## 打包
@@ -87,9 +88,10 @@ fnpack build --directory .
 2. 启动应用，首次启动会拉取 `python:3.12-slim` 并安装 `flask`、`icloudpd`。
 3. 如果想把文件存到任意位置，先进入飞牛“应用设置”，为本应用授权目录，并在配置向导里选择同步根目录；保存后重启应用。
 4. 打开桌面入口「iCloud 同步」。
-5. 填写 Apple ID 和密码，点击「认证 iCloud」。
-6. 如果日志提示验证码，在输入框填入 6 位验证码并发送。
-7. 选择照片/视频/备忘录，保存配置后运行同步。
+5. 填写方案名称、Apple ID 和当前方案保存文件夹。
+6. 填写密码，点击「认证 iCloud」。
+7. 如果日志提示验证码，在输入框填入 6 位验证码并发送。
+8. 选择照片/视频/备忘录，保存配置后运行同步。
 
 ## 注意
 

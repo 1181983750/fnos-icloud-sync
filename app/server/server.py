@@ -224,14 +224,42 @@ def make_profile(name: str = "新方案") -> dict[str, Any]:
     profile_id = "p_" + uuid.uuid4().hex[:10]
     profile["id"] = profile_id
     profile["name"] = name.strip() or "新方案"
-    profile["data_subdir"] = profile_id
+    profile["data_subdir"] = f"profiles/{profile_id}"
     return profile
+
+
+def normalize_data_subdir(value: Any, fallback: str, profile_id: str) -> str:
+    text = str(value or "").strip().replace("\\", "/")
+    for root in [SYNC_ROOT_HOST_PATH, str(DATA_DIR)]:
+        normalized_root = root.replace("\\", "/").rstrip("/")
+        if text == normalized_root:
+            text = ""
+            break
+        if normalized_root and text.startswith(f"{normalized_root}/"):
+            text = text[len(normalized_root) + 1 :]
+            break
+
+    text = re.sub(r"/+", "/", text).strip("/")
+    if profile_id != "default" and text == profile_id:
+        text = f"profiles/{profile_id}"
+
+    parts: list[str] = []
+    for part in text.split("/"):
+        cleaned = part.strip()
+        if not cleaned or cleaned in {".", ".."}:
+            continue
+        cleaned = re.sub(r'[<>:"|?*\x00-\x1f]', "_", cleaned)
+        cleaned = cleaned[:80].strip()
+        if cleaned:
+            parts.append(cleaned)
+    return "/".join(parts[:6]) or fallback
 
 
 def normalize_profile(profile: dict[str, Any]) -> None:
     profile["id"] = str(profile.get("id") or ("p_" + uuid.uuid4().hex[:10]))
     profile["name"] = str(profile.get("name") or profile.get("apple_id") or "未命名方案").strip()
-    profile["data_subdir"] = str(profile.get("data_subdir", profile["id"]))
+    fallback_subdir = "" if profile["id"] == "default" else f"profiles/{profile['id']}"
+    profile["data_subdir"] = normalize_data_subdir(profile.get("data_subdir", ""), fallback_subdir, profile["id"])
     profile["apple_id"] = str(profile.get("apple_id", "")).strip()
     profile["domain"] = "cn" if str(profile.get("domain", "com")).lower() == "cn" else "com"
     media_mode = str(profile.get("media_mode") or "copy")
@@ -343,6 +371,7 @@ def save_config(payload: dict[str, Any]) -> dict[str, Any]:
 
         for key in [
             "name",
+            "data_subdir",
             "apple_id",
             "photos_enabled",
             "videos_enabled",
@@ -384,6 +413,7 @@ def save_config(payload: dict[str, Any]) -> dict[str, Any]:
 
         normalize_profile(profile)
         write_json(CONFIG_FILE, current)
+        clear_profile_stats(profile["id"])
         return current
 
 
@@ -482,7 +512,7 @@ def profile_data_dir(profile: dict[str, Any]) -> Path:
     subdir = str(profile.get("data_subdir", profile["id"]))
     if not subdir:
         return DATA_DIR
-    return DATA_DIR / "profiles" / subdir
+    return DATA_DIR / subdir
 
 
 def profile_cookie_dir(profile: dict[str, Any]) -> Path:
@@ -961,6 +991,7 @@ def profile_summary(profile: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": profile["id"],
         "name": profile["name"],
+        "data_subdir": profile.get("data_subdir", ""),
         "apple_id": profile.get("apple_id", ""),
         "photos_enabled": profile.get("photos_enabled", False),
         "videos_enabled": profile.get("videos_enabled", False),

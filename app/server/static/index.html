@@ -42,7 +42,7 @@
               <strong id="noteCount">0</strong>
             </div>
             <div class="metric wide">
-              <span>同步根目录</span>
+              <span>当前方案目录</span>
               <strong id="dataPath">-</strong>
               <small id="dataPathMeta">-</small>
             </div>
@@ -105,9 +105,21 @@
                 </div>
 
                 <div class="field">
-                  <label for="syncRootDisplay">同步根目录（在飞牛应用设置中修改）</label>
+                  <label for="profileSubdir">当前方案保存文件夹</label>
+                  <input id="profileSubdir" placeholder="例如：personal-icloud 或 family/photos" />
+                  <small class="field-help">相对于同步根目录；多账号建议每个方案使用不同文件夹。</small>
+                </div>
+
+                <div class="field">
+                  <label for="profilePathPreview">当前方案完整保存路径</label>
+                  <input id="profilePathPreview" readonly />
+                  <small class="field-help">照片、视频、备忘录会分别写入此目录下的 photos / videos / notes。</small>
+                </div>
+
+                <div class="field">
+                  <label for="syncRootDisplay">应用同步根目录（在飞牛应用设置中修改）</label>
                   <input id="syncRootDisplay" readonly />
-                  <small id="syncRootHint" class="field-help">当前默认写入应用共享目录。</small>
+                  <small id="syncRootHint" class="field-help">这是飞牛挂载给整个应用的根目录。</small>
                 </div>
 
                 <div class="field two">

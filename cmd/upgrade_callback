@@ -1,3 +1,4 @@
 #!/bin/bash
 mkdir -p "${TRIM_PKGVAR}/config" 2>/dev/null || true
+chmod +x "${TRIM_APPDEST}/ui/index.cgi" 2>/dev/null || true
 exit 0
