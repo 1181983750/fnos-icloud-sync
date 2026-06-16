@@ -41,11 +41,11 @@
               <span>备忘录</span>
               <strong id="noteCount">0</strong>
             </div>
-            <div class="metric wide">
-              <span>当前方案目录</span>
-              <strong id="dataPath">-</strong>
-              <small id="dataPathMeta">-</small>
-            </div>
+              <div class="metric wide">
+                <span>资料保存到</span>
+                <strong id="dataPath">-</strong>
+                <small id="dataPathMeta">-</small>
+              </div>
           </section>
 
           <section id="guide" class="guide" aria-label="使用引导">
@@ -111,21 +111,13 @@
                 </div>
 
                 <div class="field">
-                  <label for="profilePathPreview">当前方案目标保存路径</label>
-                  <input id="profilePathPreview" readonly />
-                  <small class="field-help">这是 NAS 宿主机上的目标目录；照片、视频、备忘录会分别写入此目录下的 photos / videos / notes。</small>
-                </div>
-
-                <div class="field">
-                  <label for="syncRootDisplay">应用同步根目录（在飞牛应用设置中修改）</label>
-                  <input id="syncRootDisplay" readonly />
-                  <small id="syncRootHint" class="field-help">这是飞牛挂载给整个应用的根目录。</small>
-                </div>
-
-                <div class="field">
-                  <label for="containerPathPreview">当前容器实际写入路径</label>
-                  <input id="containerPathPreview" readonly />
-                  <small id="containerPathHint" class="field-help">容器始终写入 /data；真正落到哪个 NAS 目录取决于飞牛当前挂载。</small>
+                  <label>资料最终保存位置</label>
+                  <div class="path-list" id="finalPathList" aria-live="polite">
+                    <div><span>照片</span><code id="finalPhotosPath">-</code></div>
+                    <div><span>视频</span><code id="finalVideosPath">-</code></div>
+                    <div><span>备忘录</span><code id="finalNotesPath">-</code></div>
+                  </div>
+                  <small id="syncRootHint" class="field-help path-status">照片、视频、备忘录会分别保存到上面的目录。</small>
                 </div>
 
                 <div class="field two">

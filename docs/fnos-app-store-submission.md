@@ -4,15 +4,15 @@
 
 - 应用名称：iCloud 同步
 - 应用包名：icloud-sync
-- 当前版本：0.2.29
+- 当前版本：0.2.30
 - 应用类型：Docker 型 FPK 应用
 - 支持平台：x86_64
 - 最低系统版本：fnOS 1.1.8
 - 服务端口：8080
 - GitHub 仓库：https://github.com/1181983750/fnos-icloud-sync
-- Release 地址：https://github.com/1181983750/fnos-icloud-sync/releases/tag/v0.2.29
-- FPK 下载地址：https://github.com/1181983750/fnos-icloud-sync/releases/download/v0.2.29/icloud-sync-0.2.29.fpk
-- FPK SHA256：853196EB4D321DCC9B5B98659A00ABD5E0E136D8676B31011D3974914627CA99
+- Release 地址：https://github.com/1181983750/fnos-icloud-sync/releases/tag/v0.2.30
+- FPK 下载地址：https://github.com/1181983750/fnos-icloud-sync/releases/download/v0.2.30/icloud-sync-0.2.30.fpk
+- FPK SHA256：2BD896EBE68E0060B9854FCF99175407D85179B9C666C4843DAB37A3E1A0176C
 
 ## 应用简介
 
@@ -32,6 +32,7 @@ iCloud 同步是在飞牛 NAS 上运行的 iCloud 数据同步工具。应用通
 - 备忘录导出：通过 iCloud Mail IMAP 读取 Notes/备忘录文件夹，可导出为 Markdown 或 HTML；默认 IMAP 参数已折叠为高级设置，通常只需填写用户名和 App 专用密码。
 - 存储位置选择：默认使用应用共享目录 `应用文件/icloud`，也可以在飞牛应用设置中选择已授权目录作为同步根目录。容器内固定写入 `/data`，飞牛会把当前同步根目录挂载到 `/data`；页面会同时展示 NAS 目标目录和容器实际写入目录，修改根目录后需要停止并重新启动应用。
 - 启动引导：桌面入口先进入光效视差启动页，显示 Docker、依赖和 Web 服务状态，后端就绪后进入同步面板。
+- 启动引导面向普通用户展示“正在准备同步服务”，默认隐藏端口、候选入口、Docker 和依赖等调试信息。
 - 玻璃面板：启动页和主同步面板统一为 iOS 26 风格玻璃视觉，下拉框、按钮和提示控件使用高透明玻璃样式。
 - 日志查看：运行日志不会在用户手动上翻时强制滚动到底部，便于排查中途报错。
 - 离线依赖：FPK 内置 Flask 与 icloudpd 运行依赖 wheel，减少首次启动下载等待。
@@ -59,16 +60,16 @@ iCloud 同步是在飞牛 NAS 上运行的 iCloud 数据同步工具。应用通
 
 ## 审核测试建议
 
-1. 在 fnOS 应用中心手动安装 `icloud-sync-0.2.29.fpk`。
+1. 在 fnOS 应用中心手动安装 `icloud-sync-0.2.30.fpk`。
 2. 启动应用，确认桌面入口可打开光效视差启动页。
 3. 等待容器启动完成，进入 iCloud 同步面板。
 4. 打开 `/api/status`，确认 `icloudpd_available` 为 `true`，并能看到 `icloudpd_path`。
 5. 在应用设置里确认默认共享目录为 `应用文件/icloud`。
-6. 选择一个已授权目录作为同步根目录，保存后停止并重新启动应用，确认面板的“目标保存路径”和“当前容器实际写入路径”都指向新目录映射。
+6. 选择一个已授权目录作为同步根目录，保存后停止并重新启动应用，确认面板直接展示照片、视频、备忘录最终保存位置。
 7. 填写 Apple ID，点击认证 iCloud，并按页面提示输入验证码。
 8. 勾选照片/视频后运行同步，确认文件写入所选同步根目录。
 9. 如需测试备忘录，填写 iCloud IMAP 账号和 App 专用密码，导出 Notes/备忘录文件夹。
 
 ## Release 说明
 
-0.2.29 默认 iCloud 区域改为中国区，统一下拉框玻璃样式并提高主界面玻璃透明度，替换为 iCloud 同步主题新图标；任务运行中会锁定全部配置项，避免运行参数被中途修改；路径面板区分 NAS 目标目录和容器实际写入路径，明确提示修改同步根目录后需重启应用才会生效；媒体同步失败后支持自动重试，日志滚动不再强制抢到底部。
+0.2.30 启动页改为面向普通用户的文案，隐藏候选入口、端口、Docker 和依赖等调试信息；方案路径展示合并为照片、视频、备忘录最终保存位置；Docker Compose 改用相对路径挂载 server，修复部分环境重启后 /opt/icloud-sync 缺少 requirements.txt 的问题。

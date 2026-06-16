@@ -545,17 +545,17 @@ Content-Type: text/html; charset=utf-8
       <section class="panel">
         <div class="hero">
           <div class="copy">
-            <span class="eyebrow"><span class="pulse"></span> launch sequence</span>
+            <span class="eyebrow"><span class="pulse"></span> 正在启动</span>
             <h1>
               <span>iCloud</span>
               <span>同步启动</span>
               <span class="ghost" aria-hidden="true">iCloud<br />同步启动</span>
             </h1>
-            <p class="summary" id="message">正在打开应用窗口，检测后端服务是否已经准备好。首启需要拉取镜像、安装依赖，耐心一点点，光已经在路上。</p>
+            <p class="summary" id="message">正在为你准备 iCloud 同步服务，首次启动可能需要多等一会儿。</p>
             <div class="stepLabel">
               <small>当前进行到</small>
               <div class="parallaxText" id="heroStep" data-text="打开应用窗口">
-                <strong>打开应用窗口</strong>
+                <strong>打开同步应用</strong>
               </div>
             </div>
             <div class="candidate-list" id="candidateList"></div>
@@ -571,19 +571,19 @@ Content-Type: text/html; charset=utf-8
             <ul class="steps">
               <li id="stepWindow" class="done">
                 <span class="index">1</span>
-                <span><span class="stepTitle">应用窗口已打开</span><span class="stepMeta">入口页加载完成</span></span>
+                <span><span class="stepTitle">打开同步应用</span><span class="stepMeta">应用入口已准备好</span></span>
               </li>
               <li id="stepService" class="active">
                 <span class="index">2</span>
-                <span><span class="stepTitle">等待 Web 服务监听</span><span class="stepMeta" id="serviceText">正在检测服务端口</span></span>
+                <span><span class="stepTitle">准备同步服务</span><span class="stepMeta" id="serviceText">正在连接服务</span></span>
               </li>
               <li id="stepDeps">
                 <span class="index">3</span>
-                <span><span class="stepTitle">准备 Docker 与依赖</span><span class="stepMeta">首启可能需要数分钟</span></span>
+                <span><span class="stepTitle">初始化运行环境</span><span class="stepMeta">首次启动可能需要数分钟</span></span>
               </li>
               <li id="stepReady">
                 <span class="index">4</span>
-                <span><span class="stepTitle">进入同步面板</span><span class="stepMeta">服务就绪后自动跳转</span></span>
+                <span><span class="stepTitle">进入同步面板</span><span class="stepMeta">准备完成后自动进入</span></span>
               </li>
             </ul>
             <p id="elapsed">已等待 0 秒。</p>
@@ -593,22 +593,21 @@ Content-Type: text/html; charset=utf-8
             </div>
           </aside>
           <div class="diagnostics" id="diagnostics">
-            <strong>超过 2 分钟仍未进入时，可以在 SSH 里看容器状态：</strong>
-            <code>docker ps -a | grep fnos-icloud-sync
-docker logs fnos-icloud-sync --tail 200</code>
+            <strong>等待时间较长时，请先在应用中心停止后重新启动本应用。</strong>
+            <code>如果仍无法进入，可以打开应用日志查看启动详情。</code>
           </div>
           <div class="ticker">
             <div class="tickerTrack">
-              <span>启动窗口</span>
-              <span>检测服务</span>
-              <span>等待容器</span>
-              <span>安装依赖</span>
+              <span>打开应用</span>
+              <span>准备服务</span>
+              <span>同步就绪</span>
               <span>进入面板</span>
-              <span>启动窗口</span>
-              <span>检测服务</span>
-              <span>等待容器</span>
-              <span>安装依赖</span>
+              <span>开始使用</span>
+              <span>打开应用</span>
+              <span>准备服务</span>
+              <span>同步就绪</span>
               <span>进入面板</span>
+              <span>开始使用</span>
             </div>
           </div>
         </div>
@@ -636,8 +635,8 @@ docker logs fnos-icloud-sync --tail 200</code>
       const serviceText = document.getElementById("serviceText");
 
       openLink.href = bestUrl;
-      serviceText.textContent = "正在检测：" + candidates.join("，");
-      candidateList.innerHTML = candidates.map((url) => "<span>候选入口：" + url + "</span>").join("");
+      serviceText.textContent = "正在连接服务";
+      candidateList.hidden = true;
 
       function setStep(id, className) {
         document.getElementById(id).className = className || "";
@@ -654,12 +653,12 @@ docker logs fnos-icloud-sync --tail 200</code>
         elapsedEl.textContent = "已等待 " + seconds + " 秒，检测 " + attempts + " 次。";
         if (seconds > 16 && seconds <= 120) {
           setStep("stepDeps", "active");
-          setCurrentStep("准备 Docker 与依赖", "后端暂未响应，首次启动可能正在拉取镜像、创建虚拟环境或安装 icloudpd。");
+          setCurrentStep("初始化运行环境", "同步服务仍在准备中，首次启动可能需要数分钟，请稍等。");
         }
         if (seconds > 120) {
           setStep("stepService", "error");
           diagnostics.classList.add("show");
-          setCurrentStep("等待人工排查", "后端服务还没有响应，建议查看容器状态和日志。");
+          setCurrentStep("需要重新启动", "等待时间较长，请先在应用中心停止后重新启动本应用。");
         }
       }
 
@@ -687,7 +686,7 @@ docker logs fnos-icloud-sync --tail 200</code>
               setStep("stepService", "done");
               setStep("stepDeps", "done");
               setStep("stepReady", "active");
-              setCurrentStep("进入同步面板", "后端服务已就绪，正在为你打开 iCloud 同步配置面板。");
+              setCurrentStep("进入同步面板", "同步服务已准备好，正在为你打开配置面板。");
               clearInterval(timer);
               setTimeout(() => {
                 window.location.href = bestUrl;
@@ -696,7 +695,7 @@ docker logs fnos-icloud-sync --tail 200</code>
             }
           } catch (error) {
             if (Math.floor((Date.now() - startedAt) / 1000) <= 16) {
-              setCurrentStep("等待 Web 服务监听", "正在检测服务端口，服务启动完成后会自动进入面板。");
+              setCurrentStep("准备同步服务", "正在连接同步服务，准备完成后会自动进入面板。");
             }
           }
         }

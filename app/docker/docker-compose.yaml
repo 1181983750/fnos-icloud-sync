@@ -39,7 +39,7 @@ services:
     ports:
       - "${TRIM_SERVICE_PORT}:8080"
     volumes:
-      - "${TRIM_APPDEST}/server:/opt/icloud-sync:ro"
+      - "../server:/opt/icloud-sync:ro"
       - "${TRIM_PKGVAR}/config:/config"
       - "${TRIM_PKGVAR}/logs:/logs"
       - "${wizard_sync_root_path:-/var/apps/icloud-sync/shares/icloud}:/data"

@@ -2,7 +2,6 @@ const fields = {
   profileName: document.querySelector("#profileName"),
   appleId: document.querySelector("#appleId"),
   profileSubdir: document.querySelector("#profileSubdir"),
-  profilePathPreview: document.querySelector("#profilePathPreview"),
   authPassword: document.querySelector("#authPassword"),
   storePassword: document.querySelector("#storePassword"),
   photosEnabled: document.querySelector("#photosEnabled"),
@@ -62,10 +61,10 @@ const els = {
   noteCount: document.querySelector("#noteCount"),
   dataPath: document.querySelector("#dataPath"),
   dataPathMeta: document.querySelector("#dataPathMeta"),
-  syncRootDisplay: document.querySelector("#syncRootDisplay"),
   syncRootHint: document.querySelector("#syncRootHint"),
-  containerPathPreview: document.querySelector("#containerPathPreview"),
-  containerPathHint: document.querySelector("#containerPathHint"),
+  finalPhotosPath: document.querySelector("#finalPhotosPath"),
+  finalVideosPath: document.querySelector("#finalVideosPath"),
+  finalNotesPath: document.querySelector("#finalNotesPath"),
   cloudDeleteWarning: document.querySelector("#cloudDeleteWarning"),
   lastSync: document.querySelector("#lastSync"),
   logPanel: document.querySelector(".log-panel"),
@@ -141,18 +140,13 @@ function updateProfilePathPreview(status = appState.status) {
     status?.storage?.applied_root_path ||
     status?.storage?.container_root ||
     "";
-  const preview = joinDisplayPath(root, currentProfileSubdir());
-  fields.profilePathPreview.value = preview;
-  return preview;
+  return joinDisplayPath(root, currentProfileSubdir());
 }
 
-function updateContainerPathPreview(status = appState.status) {
-  const writeRoot = status?.storage?.container_root || status?.paths?.data || "";
-  const preview = joinDisplayPath(writeRoot, currentProfileSubdir());
-  if (els.containerPathPreview) {
-    els.containerPathPreview.value = preview;
-  }
-  return preview;
+function updateFinalPaths(basePath) {
+  els.finalPhotosPath.textContent = joinDisplayPath(basePath, "photos");
+  els.finalVideosPath.textContent = joinDisplayPath(basePath, "videos");
+  els.finalNotesPath.textContent = joinDisplayPath(basePath, "notes");
 }
 
 const guideButtons = {
@@ -328,8 +322,7 @@ function applyProfile(profile) {
   fields.profileName.value = profile.name || "";
   fields.appleId.value = profile.apple_id || "";
   fields.profileSubdir.value = profile.data_subdir || "";
-  updateProfilePathPreview();
-  updateContainerPathPreview();
+  updateFinalPaths(updateProfilePathPreview());
   fields.authPassword.value = "";
   fields.storePassword.checked = Boolean(profile.store_password);
   fields.photosEnabled.checked = Boolean(profile.photos_enabled);
@@ -479,29 +472,16 @@ function renderStatus(status) {
   els.noteCount.textContent = status.counts?.notes ?? 0;
 
   const selectedRoot = status.storage?.selected_root_path || status.paths?.data || "-";
-  const appliedRoot = status.storage?.applied_root_path || selectedRoot;
-  const authorizedCount = status.storage?.authorized_paths?.length ?? 0;
   const restartRequired = Boolean(status.storage?.restart_required);
-  const rootMode = status.storage?.using_default_root ? "当前目标为应用共享目录" : "当前目标为飞牛已授权目录";
-  let rootHint = status.storage?.using_default_root
-    ? "当前使用默认应用共享目录。如需写到外接存储或其他目录，请到飞牛应用设置里为本应用授权目录并选择。"
-    : `已选择飞牛授权目录；已检测到 ${authorizedCount} 个授权目录，可在飞牛应用设置里切换。`;
-
-  if (restartRequired) {
-    rootHint = `已选择 ${selectedRoot}，但当前容器仍挂载在 ${appliedRoot}。请在应用中心停止后重新启动，让 /data 重新挂载到新目录。`;
-  }
-
   const profilePath = updateProfilePathPreview(status);
-  const containerPath = updateContainerPathPreview(status);
+  const statusPrefix = restartRequired
+    ? `已选择 ${selectedRoot}，但本次启动仍在使用旧位置；请在应用中心停止后重新启动本应用，资料才会保存到上方目录。`
+    : `资料会保存到上方目录。`;
+
+  updateFinalPaths(profilePath);
   els.dataPath.textContent = profilePath;
-  els.dataPathMeta.textContent = `${rootMode} · 容器写入 ${containerPath} · 当前挂载来源 ${appliedRoot}`;
-  els.syncRootDisplay.value = selectedRoot;
-  els.syncRootHint.textContent = rootHint;
-  if (els.containerPathHint) {
-    els.containerPathHint.textContent = restartRequired
-      ? `现在仍会写入旧挂载 ${appliedRoot} 对应的位置；重启应用后才会落到 ${selectedRoot}。`
-      : `容器内 ${containerPath} 已映射到 NAS 目录 ${profilePath}。`;
-  }
+  els.dataPathMeta.textContent = restartRequired ? `重启应用后生效，当前仍使用旧位置` : "照片 / 视频 / 备忘录会分目录保存";
+  els.syncRootHint.textContent = `${statusPrefix} 照片在 photos，视频在 videos，备忘录在 notes。`;
 
   const lastMedia = status.state?.last_media_sync || "从未同步媒体";
   const lastNotes = status.state?.last_notes_sync || "从未导出备忘录";
@@ -714,10 +694,9 @@ els.form.addEventListener("submit", async (event) => {
   const eventName = field.type === "checkbox" || field.tagName === "SELECT" ? "change" : "input";
   field.addEventListener(eventName, () => {
     releaseGuideStep();
-    if (field === fields.profileSubdir) {
-      updateProfilePathPreview();
-      updateContainerPathPreview();
-    }
+      if (field === fields.profileSubdir) {
+        updateFinalPaths(updateProfilePathPreview());
+      }
     updateGuide();
   });
 });

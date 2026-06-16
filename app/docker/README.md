@@ -12,6 +12,7 @@
 - 如果 `/opt/icloud-sync/wheels` 中存在 wheel，优先离线安装依赖。
 - Web 服务监听容器内 `8080`，由 fnOS 映射到应用端口。
 - 同步文件始终写入容器内 `/data`，Docker Compose 会把 `wizard_sync_root_path` 指向的 NAS 目录挂载到 `/data`。
+- 应用代码使用相对路径 `../server:/opt/icloud-sync:ro` 挂载，避免 `${TRIM_APPDEST}` 未传入 Docker Compose 时挂出空目录，导致容器找不到 `requirements.txt`。
 
 ## 维护注意
 
