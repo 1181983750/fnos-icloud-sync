@@ -50,6 +50,8 @@ const els = {
   stopJob: document.querySelector("#stopJob"),
   sendInputBtn: document.querySelector("#sendInputBtn"),
   consoleInput: document.querySelector("#consoleInput"),
+  logSendInputBtn: document.querySelector("#logSendInputBtn"),
+  logConsoleInput: document.querySelector("#logConsoleInput"),
   logOutput: document.querySelector("#logOutput"),
   jobStatus: document.querySelector("#jobStatus"),
   photoCount: document.querySelector("#photoCount"),
@@ -715,8 +717,8 @@ els.notesSyncBtn.addEventListener("click", async () => {
   }
 });
 
-els.sendInputBtn.addEventListener("click", async () => {
-  const value = els.consoleInput.value.trim();
+async function sendConsoleInput(inputEl) {
+  const value = inputEl.value.trim();
   if (!value) {
     return;
   }
@@ -725,17 +727,37 @@ els.sendInputBtn.addEventListener("click", async () => {
       method: "POST",
       body: JSON.stringify({ value }),
     });
-    els.consoleInput.value = "";
+    if (els.consoleInput) {
+      els.consoleInput.value = "";
+    }
+    if (els.logConsoleInput) {
+      els.logConsoleInput.value = "";
+    }
     renderJob(job);
   } catch (error) {
     showToast(error.message);
   }
+}
+
+els.sendInputBtn.addEventListener("click", async () => {
+  await sendConsoleInput(els.consoleInput);
+});
+
+els.logSendInputBtn.addEventListener("click", async () => {
+  await sendConsoleInput(els.logConsoleInput);
 });
 
 els.consoleInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter") {
     event.preventDefault();
     els.sendInputBtn.click();
+  }
+});
+
+els.logConsoleInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    els.logSendInputBtn.click();
   }
 });
 

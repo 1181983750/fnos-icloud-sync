@@ -4,15 +4,15 @@
 
 - 应用名称：iCloud 同步
 - 应用包名：icloud-sync
-- 当前版本：0.2.26
+- 当前版本：0.2.27
 - 应用类型：Docker 型 FPK 应用
 - 支持平台：x86_64
 - 最低系统版本：fnOS 1.1.8
 - 服务端口：8080
 - GitHub 仓库：https://github.com/1181983750/fnos-icloud-sync
-- Release 地址：https://github.com/1181983750/fnos-icloud-sync/releases/tag/v0.2.26
-- FPK 下载地址：https://github.com/1181983750/fnos-icloud-sync/releases/download/v0.2.26/icloud-sync-0.2.26.fpk
-- FPK SHA256：A54543AEFEA454E1C826476A4A30B38056A882448D3758220DF34CB8EA29034D
+- Release 地址：https://github.com/1181983750/fnos-icloud-sync/releases/tag/v0.2.27
+- FPK 下载地址：https://github.com/1181983750/fnos-icloud-sync/releases/download/v0.2.27/icloud-sync-0.2.27.fpk
+- FPK SHA256：7583F239273925A9EEA47AE18B50F6F3C343D6CE022E27AC30FA922FF71483F9
 
 ## 应用简介
 
@@ -25,10 +25,10 @@ iCloud 同步是在飞牛 NAS 上运行的 iCloud 数据同步工具。应用通
 - 多方案管理：支持创建多个同步方案，方案之间的 Cookie、目录、状态相互隔离。
 - Apple ID 认证：支持 iCloud.com 和中国区 iCloud，页面提供验证码/控制台输入发送入口。
 - 同步范围配置：支持照片、视频、备忘录开关。
-- 媒体下载选项：支持目录结构、相册、资料库、最近天数、照片尺寸、Live Photo、保留中文文件名、写入 EXIF 时间等配置。
+- 媒体下载选项：支持目录结构、相册、资料库、最近天数、照片尺寸、Live Photo、保留中文文件名、写入 EXIF 时间等配置；页面内提供目录占位符、相册名称和资料库选择说明。
 - 计划同步：支持按分钟间隔自动同步媒体文件。
 - 云端清理：可选高风险 Move 模式，媒体同步到 NAS 后请求删除 iCloud 云端对应照片/视频。
-- 备忘录导出：通过 iCloud Mail IMAP 读取 Notes/备忘录文件夹，可导出为 Markdown 或 HTML。
+- 备忘录导出：通过 iCloud Mail IMAP 读取 Notes/备忘录文件夹，可导出为 Markdown 或 HTML；默认 IMAP 参数已折叠为高级设置，通常只需填写用户名和 App 专用密码。
 - 存储位置选择：默认使用应用共享目录 `应用文件/icloud`，也可以在飞牛应用设置中选择已授权目录作为同步根目录。
 - 启动引导：桌面入口先进入光效视差启动页，显示 Docker、依赖和 Web 服务状态，后端就绪后进入同步面板。
 - 玻璃面板：启动页和主同步面板统一为 iOS 26 风格玻璃视觉，减少普通 Web 表单感。
@@ -55,7 +55,7 @@ iCloud 同步是在飞牛 NAS 上运行的 iCloud 数据同步工具。应用通
 
 ## 审核测试建议
 
-1. 在 fnOS 应用中心手动安装 `icloud-sync-0.2.26.fpk`。
+1. 在 fnOS 应用中心手动安装 `icloud-sync-0.2.27.fpk`。
 2. 启动应用，确认桌面入口可打开光效视差启动页。
 3. 等待容器启动完成，进入 iCloud 同步面板。
 4. 打开 `/api/status`，确认 `icloudpd_available` 为 `true`，并能看到 `icloudpd_path`。
@@ -67,4 +67,4 @@ iCloud 同步是在飞牛 NAS 上运行的 iCloud 数据同步工具。应用通
 
 ## Release 说明
 
-0.2.26 恢复桌面入口光效视差启动页，并将主同步面板统一为 iOS 26 风格玻璃面板；同时保留飞牛服务端口候选检测和日志排查提示，避免后端未就绪时出现拒绝连接或破文件图标。
+0.2.27 在同步范围表单中补充目录结构、相册和资料库说明，将资料库改为下拉选择，把备忘录 IMAP 默认项折叠为高级设置，并在运行日志下方新增控制台输入栏。

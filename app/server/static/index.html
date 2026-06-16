@@ -178,6 +178,12 @@
                   <div class="field">
                     <label for="folderStructure">目录结构</label>
                     <input id="folderStructure" placeholder="{:%Y/%m/%d}" />
+                    <div class="hint-card">
+                      <strong>用于决定照片在 NAS 里的分层目录。</strong>
+                      <span>常用写法：<code>{:%Y/%m/%d}</code> 会按拍摄日期保存为 <code>2026/06/16</code>。</span>
+                      <span>支持年月日占位：<code>%Y</code> 四位年份、<code>%m</code> 月份、<code>%d</code> 日期；可以用斜杠组合多级目录。</span>
+                      <span>也可以写固定目录，例如 <code>photos/{:%Y-%m}</code>，表示按月份归档。</span>
+                    </div>
                   </div>
                   <div class="field">
                     <label for="size">照片尺寸</label>
@@ -204,10 +210,24 @@
                   <div class="field">
                     <label for="album">相册</label>
                     <input id="album" placeholder="留空表示全部" />
+                    <div class="hint-card">
+                      <strong>只同步某个 iCloud 相册时填写。</strong>
+                      <span>留空表示同步全部照片；填写时请输入 iCloud 里看到的相册名称，例如 <code>家庭</code>、<code>旅行</code>。</span>
+                      <span>名称要尽量和 iCloud 相册一致。多个相册建议新建多个同步方案分别配置。</span>
+                    </div>
                   </div>
                   <div class="field">
                     <label for="library">资料库</label>
-                    <input id="library" placeholder="Personal Library / Shared Library" />
+                    <select id="library">
+                      <option value="">自动选择 / 全部资料库</option>
+                      <option value="Personal Library">Personal Library（个人资料库）</option>
+                      <option value="Shared Library">Shared Library（共享资料库）</option>
+                    </select>
+                    <div class="hint-card">
+                      <strong>用于区分 iCloud 个人资料库和共享资料库。</strong>
+                      <span>不确定就选“自动选择 / 全部资料库”，这是最安全的默认值。</span>
+                      <span>如果你开启了 iCloud 共享图库，并且只想同步其中一边，再选择个人或共享资料库。</span>
+                    </div>
                   </div>
                 </div>
 
@@ -260,6 +280,7 @@
 
               <section id="notesSection" class="notes-box guide-section guide-section-tight">
                 <h3>备忘录 IMAP</h3>
+                <p class="section-note">只在需要导出 iCloud 备忘录时填写。服务器、端口和文件夹已使用 iCloud 默认值，通常不用改。</p>
                 <div class="field">
                   <label for="imapUser">用户名</label>
                   <input id="imapUser" autocomplete="username" placeholder="通常为 Apple ID" />
@@ -267,30 +288,47 @@
                 <div class="field">
                   <label for="imapPassword">App 专用密码</label>
                   <input id="imapPassword" type="password" autocomplete="current-password" placeholder="留空则保留现有密码" />
+                  <small class="field-help">这里建议使用 Apple 账号生成的 App 专用密码，不建议填写 Apple ID 登录密码。</small>
                 </div>
                 <div class="row">
-                  <div class="field">
-                    <label for="imapHost">服务器</label>
-                    <input id="imapHost" />
-                  </div>
-                  <div class="field narrow">
-                    <label for="imapPort">端口</label>
-                    <input id="imapPort" inputmode="numeric" />
-                  </div>
-                </div>
-                <div class="row">
-                  <div class="field">
-                    <label for="imapFolder">文件夹</label>
-                    <input id="imapFolder" />
-                  </div>
                   <div class="field">
                     <label for="noteFormat">格式</label>
                     <select id="noteFormat">
                       <option value="markdown">Markdown</option>
                       <option value="html">HTML</option>
                     </select>
+                    <small class="field-help">Markdown 适合长期保存和二次整理；HTML 更接近网页查看效果。</small>
                   </div>
                 </div>
+                <details class="advanced-options">
+                  <summary>高级 IMAP 设置（通常不用改）</summary>
+                  <div class="row">
+                    <div class="field">
+                      <label for="imapHost">服务器</label>
+                      <input id="imapHost" list="imapHostOptions" />
+                      <datalist id="imapHostOptions">
+                        <option value="imap.mail.me.com"></option>
+                      </datalist>
+                    </div>
+                    <div class="field narrow">
+                      <label for="imapPort">端口</label>
+                      <select id="imapPort">
+                        <option value="993">993（SSL 默认）</option>
+                        <option value="143">143（少数代理环境）</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="field">
+                    <label for="imapFolder">文件夹</label>
+                    <input id="imapFolder" list="imapFolderOptions" />
+                    <datalist id="imapFolderOptions">
+                      <option value="Notes"></option>
+                      <option value="备忘录"></option>
+                      <option value="Notes/备忘录"></option>
+                    </datalist>
+                    <small class="field-help">默认是 <code>Notes</code>。如果导出为空，可以按 iCloud Mail 里看到的文件夹名称改成“备忘录”等。</small>
+                  </div>
+                </details>
               </section>
             </aside>
           </div>
@@ -301,6 +339,11 @@
               <span id="lastSync">-</span>
             </div>
             <pre id="logOutput">等待任务...</pre>
+            <div class="log-console input-line">
+              <input id="logConsoleInput" placeholder="在这里输入验证码、确认文字或控制台回复" />
+              <button id="logSendInputBtn" type="button">发送</button>
+            </div>
+            <p class="field-help">当日志提示输入 2FA 验证码、确认文字或控制台交互内容时，可以直接在这里发送。</p>
           </section>
         </section>
       </div>
