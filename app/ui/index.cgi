@@ -13,17 +13,16 @@ Content-Type: text/html; charset=utf-8
     <title>iCloud 同步</title>
     <style>
       :root {
-        --bg: #f4f6f4;
-        --surface: #ffffff;
-        --surface-soft: #eef5f1;
-        --line: #d7ded9;
-        --text: #1d2521;
-        --muted: #65746c;
-        --green: #14795b;
-        --green-deep: #0d5f47;
-        --amber: #9b6718;
-        --red: #a3403b;
-        --blue: #376fa3;
+        color-scheme: light;
+        --ink: #13211c;
+        --muted: #668072;
+        --glow: #58d7b0;
+        --cyan: #7bd7ff;
+        --gold: #ffe59a;
+        --rose: #ffaec8;
+        --panel: rgba(250, 255, 252, 0.72);
+        --line: rgba(37, 80, 63, 0.14);
+        --shadow: rgba(20, 55, 42, 0.18);
       }
 
       * {
@@ -31,209 +30,415 @@ Content-Type: text/html; charset=utf-8
       }
 
       body {
-        margin: 0;
         min-height: 100vh;
-        background: var(--bg);
-        color: var(--text);
-        font-family: Inter, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
-        font-size: 14px;
+        margin: 0;
+        overflow: hidden;
+        color: var(--ink);
+        font-family: "HarmonyOS Sans SC", "MiSans", "Microsoft YaHei", "Segoe UI", sans-serif;
+        background:
+          radial-gradient(circle at 20% 18%, rgba(123, 215, 255, 0.36), transparent 30vw),
+          radial-gradient(circle at 82% 12%, rgba(255, 229, 154, 0.42), transparent 28vw),
+          linear-gradient(145deg, #f7fbf8 0%, #dbeae4 46%, #b5d7d5 100%);
       }
 
-      main {
-        width: min(980px, calc(100% - 32px));
+      body::before,
+      body::after {
+        content: "";
+        position: fixed;
+        inset: -20%;
+        pointer-events: none;
+      }
+
+      body::before {
+        background:
+          linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.56) 45%, transparent 62%),
+          repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.12) 0 1px, transparent 1px 84px);
+        mix-blend-mode: screen;
+        transform: translateX(-24%);
+        animation: lightSweep 7s ease-in-out infinite;
+      }
+
+      body::after {
+        background:
+          radial-gradient(circle at 50% 50%, transparent 0 46%, rgba(19, 33, 28, 0.08) 100%),
+          linear-gradient(rgba(255, 255, 255, 0.2) 1px, transparent 1px);
+        background-size: auto, auto 8px;
+      }
+
+      .stage {
+        position: relative;
+        z-index: 1;
         min-height: 100vh;
-        margin: 0 auto;
         display: grid;
-        align-content: center;
-        gap: 14px;
-        padding: 28px 0;
+        place-items: center;
+        padding: 34px;
       }
 
-      .topline {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 16px;
+      .orb {
+        position: absolute;
+        width: 36vw;
+        height: 36vw;
+        min-width: 320px;
+        min-height: 320px;
+        border-radius: 999px;
+        filter: blur(18px);
+        opacity: 0.55;
+        animation: floatOrb 11s ease-in-out infinite;
       }
 
-      .eyebrow {
-        margin: 0 0 6px;
-        color: var(--green);
-        font-size: 13px;
-        font-weight: 800;
+      .orb.one {
+        left: -10vw;
+        bottom: -14vw;
+        background: radial-gradient(circle, rgba(88, 215, 176, 0.58), transparent 68%);
       }
 
-      h1,
-      h2,
-      p {
-        margin: 0;
-      }
-
-      h1 {
-        font-size: clamp(28px, 4vw, 44px);
-        letter-spacing: 0;
-      }
-
-      .pill {
-        display: inline-flex;
-        align-items: center;
-        min-height: 32px;
-        border-radius: 6px;
-        padding: 0 10px;
-        background: #e5f3ed;
-        color: var(--green-deep);
-        font-weight: 800;
-        white-space: nowrap;
+      .orb.two {
+        right: -12vw;
+        top: -12vw;
+        background: radial-gradient(circle, rgba(255, 174, 200, 0.52), transparent 66%);
+        animation-delay: -5s;
       }
 
       .panel {
+        position: relative;
+        width: min(1060px, 100%);
+        min-height: 610px;
+        overflow: hidden;
         border: 1px solid var(--line);
-        border-radius: 8px;
-        background: var(--surface);
-        padding: 18px;
-        box-shadow: 0 12px 30px rgba(25, 40, 32, 0.08);
+        border-radius: 34px;
+        background: var(--panel);
+        box-shadow: 0 34px 100px var(--shadow);
+        backdrop-filter: blur(24px) saturate(1.22);
       }
 
-      .status-grid {
+      .panel::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+          linear-gradient(120deg, rgba(255, 255, 255, 0.62), transparent 28%),
+          radial-gradient(circle at 78% 28%, rgba(255, 255, 255, 0.8), transparent 10%),
+          linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.34), transparent);
+        transform: translateX(-58%);
+        animation: panelShine 5.2s ease-in-out infinite;
+      }
+
+      .hero {
+        position: relative;
+        z-index: 1;
         display: grid;
-        grid-template-columns: minmax(0, 1fr) 280px;
-        gap: 14px;
+        grid-template-columns: minmax(0, 1.08fr) 360px;
+        min-height: inherit;
       }
 
-      .lead {
+      .copy {
+        position: relative;
+        padding: 64px;
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        min-height: 34px;
+        border: 1px solid rgba(19, 33, 28, 0.12);
+        border-radius: 999px;
+        padding: 6px 12px;
+        color: #245f4d;
+        background: rgba(255, 255, 255, 0.52);
+        font-size: 13px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+      }
+
+      .pulse {
+        width: 9px;
+        height: 9px;
+        border-radius: 999px;
+        background: var(--glow);
+        box-shadow: 0 0 0 0 rgba(88, 215, 176, 0.56);
+        animation: pulse 1.8s infinite;
+      }
+
+      h1 {
+        position: relative;
+        margin: 34px 0 16px;
+        max-width: 650px;
+        font-size: clamp(52px, 8vw, 104px);
+        line-height: 0.94;
+        letter-spacing: -0.08em;
+      }
+
+      h1 span {
+        display: block;
+      }
+
+      .ghost {
+        position: absolute;
+        left: 7px;
+        top: 7px;
+        z-index: -1;
+        color: transparent;
+        -webkit-text-stroke: 1px rgba(36, 95, 77, 0.18);
+        transform: translate3d(var(--parallax-x, 0), var(--parallax-y, 0), 0);
+      }
+
+      .summary {
+        max-width: 570px;
+        margin: 0;
         color: var(--muted);
-        line-height: 1.8;
-        margin-top: 10px;
+        font-size: 17px;
+        line-height: 1.9;
+      }
+
+      .stepLabel {
+        display: grid;
+        gap: 9px;
+        margin-top: 34px;
+      }
+
+      .stepLabel small {
+        color: #759183;
+        font-size: 12px;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+      }
+
+      .parallaxText {
+        position: relative;
+        min-height: 58px;
+        font-size: clamp(28px, 5vw, 56px);
+        font-weight: 800;
+        letter-spacing: -0.05em;
+      }
+
+      .parallaxText::before,
+      .parallaxText::after {
+        content: attr(data-text);
+        position: absolute;
+        inset: 0 auto auto 0;
+        pointer-events: none;
+      }
+
+      .parallaxText::before {
+        color: rgba(123, 215, 255, 0.35);
+        transform: translate3d(calc(var(--parallax-x, 0) * -0.8), -7px, 0);
+      }
+
+      .parallaxText::after {
+        color: rgba(255, 174, 200, 0.34);
+        transform: translate3d(calc(var(--parallax-x, 0) * 0.7), 8px, 0);
+      }
+
+      .parallaxText strong {
+        position: relative;
+        z-index: 2;
+        background: linear-gradient(100deg, #183a31, #0a8b68 42%, #1773a8);
+        -webkit-background-clip: text;
+        color: transparent;
+      }
+
+      .ticker {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        overflow: hidden;
+        border-top: 1px solid rgba(37, 80, 63, 0.12);
+        background: rgba(255, 255, 255, 0.42);
+        white-space: nowrap;
+      }
+
+      .tickerTrack {
+        display: inline-flex;
+        gap: 48px;
+        min-width: 200%;
+        padding: 16px 0;
+        color: rgba(19, 33, 28, 0.58);
+        font-size: 14px;
+        letter-spacing: 0.2em;
+        animation: ticker 20s linear infinite;
+      }
+
+      .status {
+        position: relative;
+        border-left: 1px solid rgba(37, 80, 63, 0.14);
+        padding: 64px 42px;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.44), rgba(255, 255, 255, 0.2));
+      }
+
+      .ring {
+        width: 188px;
+        height: 188px;
+        margin: 0 auto 40px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        background:
+          radial-gradient(circle at center, rgba(255, 255, 255, 0.72) 0 58%, transparent 59%),
+          conic-gradient(from 90deg, var(--glow), var(--cyan), var(--gold), var(--glow));
+        box-shadow: 0 20px 55px rgba(36, 95, 77, 0.14);
+        animation: rotateGlow 9s linear infinite;
+      }
+
+      .ringText {
+        display: grid;
+        place-items: center;
+        width: 150px;
+        height: 150px;
+        border-radius: 50%;
+        background: rgba(250, 255, 252, 0.82);
+        animation: rotateGlow 9s linear infinite reverse;
+      }
+
+      .ringText strong {
+        font-size: 42px;
+        letter-spacing: -0.06em;
+      }
+
+      .ringText span {
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.2em;
       }
 
       .steps {
         display: grid;
-        gap: 10px;
+        gap: 12px;
         margin: 0;
         padding: 0;
         list-style: none;
       }
 
-      .step {
+      .steps li {
         display: grid;
-        grid-template-columns: 28px minmax(0, 1fr);
-        gap: 10px;
+        grid-template-columns: 28px 1fr;
+        gap: 11px;
         align-items: center;
-        min-height: 58px;
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        padding: 10px;
-        background: #fbfcfb;
+        min-height: 70px;
+        border: 1px solid rgba(37, 80, 63, 0.13);
+        border-radius: 18px;
+        padding: 12px 14px;
+        background: rgba(255, 255, 255, 0.48);
         color: var(--muted);
       }
 
-      .step strong,
-      .step span {
-        display: block;
+      .steps li.active {
+        color: #12362d;
+        border-color: rgba(10, 139, 104, 0.35);
+        background: rgba(255, 255, 255, 0.74);
       }
 
-      .step strong {
-        color: var(--text);
+      .steps li.done {
+        color: #245f4d;
       }
 
-      .step .num {
+      .index {
         display: grid;
         place-items: center;
         width: 28px;
         height: 28px;
         border-radius: 50%;
-        background: #dfe8e3;
-        color: #415249;
-        font-size: 12px;
+        background: rgba(37, 80, 63, 0.1);
+        color: #789286;
         font-weight: 800;
       }
 
-      .step.active {
-        border-color: #9dc9b9;
-        background: #f0faf5;
+      .steps li.active .index,
+      .steps li.done .index {
+        color: white;
+        background: linear-gradient(135deg, #0a8b68, #5ac8ff);
+        box-shadow: 0 0 26px rgba(88, 215, 176, 0.46);
       }
 
-      .step.done .num,
-      .step.active .num {
-        background: var(--green);
-        color: #fff;
+      .steps li.error .index {
+        color: white;
+        background: #a3403b;
       }
 
-      .step.error {
-        border-color: #efc0ba;
-        background: #fff6f4;
-      }
-
-      .step.error .num {
-        background: var(--red);
-        color: #fff;
-      }
-
-      .metrics {
-        display: grid;
-        gap: 10px;
-      }
-
-      .metric {
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        padding: 12px;
-        background: var(--surface-soft);
-      }
-
-      .metric span {
+      .stepTitle,
+      .stepMeta {
         display: block;
-        color: var(--muted);
-        margin-bottom: 6px;
       }
 
-      .metric strong {
-        display: block;
-        font-size: 22px;
+      .stepTitle {
+        font-weight: 800;
+      }
+
+      .stepMeta {
+        margin-top: 3px;
+        font-size: 12px;
+        line-height: 1.45;
+      }
+
+      #elapsed {
+        margin: 30px 0 0;
+        color: #445c51;
+        font-weight: 700;
       }
 
       .actions {
         display: flex;
         flex-wrap: wrap;
-        gap: 8px;
-        margin-top: 16px;
+        gap: 10px;
+        margin-top: 28px;
       }
 
       a,
       button {
-        min-height: 36px;
-        border: 1px solid var(--line);
-        border-radius: 6px;
-        background: #fff;
-        color: var(--text);
-        padding: 0 14px;
+        min-height: 42px;
+        border: 1px solid rgba(37, 80, 63, 0.15);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.64);
+        color: var(--ink);
+        padding: 0 18px;
         cursor: pointer;
         font: inherit;
+        font-weight: 800;
         text-decoration: none;
         display: inline-flex;
         align-items: center;
       }
 
       .primary {
-        border-color: var(--green);
-        background: var(--green);
-        color: #fff;
-        font-weight: 800;
+        border-color: transparent;
+        background: linear-gradient(135deg, #0a8b68, #1679a8);
+        color: white;
+        box-shadow: 0 12px 28px rgba(10, 139, 104, 0.25);
+      }
+
+      .candidate-list {
+        display: grid;
+        gap: 5px;
+        margin-top: 18px;
+        color: var(--muted);
+        font-size: 12px;
+        overflow-wrap: anywhere;
       }
 
       .diagnostics {
-        display: none;
+        position: absolute;
+        left: 42px;
+        right: 42px;
+        bottom: 48px;
+        z-index: 2;
+        opacity: 0;
+        transform: translateY(8px);
+        pointer-events: none;
+        transition: opacity 160ms ease, transform 160ms ease;
       }
 
       .diagnostics.show {
-        display: block;
+        opacity: 1;
+        transform: translateY(0);
       }
 
       code {
         display: block;
         margin-top: 10px;
-        border-radius: 8px;
-        background: #111a16;
+        border-radius: 14px;
+        background: rgba(17, 26, 22, 0.88);
         color: #d9f1e5;
         padding: 12px;
         line-height: 1.65;
@@ -243,84 +448,172 @@ Content-Type: text/html; charset=utf-8
         font-size: 12px;
       }
 
-      .candidate-list {
-        display: grid;
-        gap: 6px;
-        margin-top: 10px;
-        color: var(--muted);
+      @keyframes lightSweep {
+        0%,
+        100% {
+          transform: translateX(-26%);
+        }
+        50% {
+          transform: translateX(26%);
+        }
       }
 
-      @media (max-width: 760px) {
-        .topline,
-        .status-grid {
+      @keyframes panelShine {
+        0%,
+        100% {
+          transform: translateX(-62%);
+        }
+        55% {
+          transform: translateX(62%);
+        }
+      }
+
+      @keyframes pulse {
+        70% {
+          box-shadow: 0 0 0 13px rgba(88, 215, 176, 0);
+        }
+        100% {
+          box-shadow: 0 0 0 0 rgba(88, 215, 176, 0);
+        }
+      }
+
+      @keyframes floatOrb {
+        0%,
+        100% {
+          transform: translate3d(0, 0, 0) scale(1);
+        }
+        50% {
+          transform: translate3d(40px, -24px, 0) scale(1.05);
+        }
+      }
+
+      @keyframes rotateGlow {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      @keyframes ticker {
+        to {
+          transform: translateX(-50%);
+        }
+      }
+
+      @media (max-width: 860px) {
+        body {
+          overflow: auto;
+        }
+
+        .stage {
+          padding: 18px;
+        }
+
+        .panel {
+          min-height: auto;
+          border-radius: 24px;
+        }
+
+        .hero {
           grid-template-columns: 1fr;
         }
 
-        .topline {
-          align-items: flex-start;
-          flex-direction: column;
+        .copy,
+        .status {
+          padding: 32px;
+        }
+
+        .status {
+          border-left: 0;
+          border-top: 1px solid rgba(37, 80, 63, 0.14);
+        }
+
+        .ticker {
+          position: relative;
+        }
+
+        .diagnostics {
+          position: static;
+          margin: 0 32px 32px;
         }
       }
     </style>
   </head>
   <body>
-    <main>
-      <section class="topline">
-        <div>
-          <p class="eyebrow">FNOS iCloud Sync</p>
-          <h1>iCloud 同步正在启动</h1>
-        </div>
-        <span id="statePill" class="pill">检测中</span>
-      </section>
-
-      <section class="panel status-grid">
-        <div>
-          <h2 id="headline">正在连接 Web 面板</h2>
-          <p id="message" class="lead">窗口已经打开，正在检测后端服务。如果是首次启动，Docker 拉取镜像和安装依赖可能需要几分钟。</p>
-          <div class="actions">
-            <a id="openLink" class="primary" href="#" rel="noreferrer">立即尝试进入</a>
-            <button type="button" onclick="checkNow()">重新检测</button>
-          </div>
-          <div id="candidateList" class="candidate-list"></div>
-        </div>
-
-        <div class="metrics">
-          <div class="metric">
-            <span>检测次数</span>
-            <strong id="attempts">0</strong>
-          </div>
-          <div class="metric">
-            <span>等待时间</span>
-            <strong id="elapsed">0 秒</strong>
-          </div>
-        </div>
-      </section>
-
+    <main class="stage">
+      <div class="orb one"></div>
+      <div class="orb two"></div>
       <section class="panel">
-        <ol class="steps">
-          <li id="stepWindow" class="step done">
-            <span class="num">1</span>
-            <span><strong>应用窗口已打开</strong><span>本地启动页加载完成</span></span>
-          </li>
-          <li id="stepService" class="step active">
-            <span class="num">2</span>
-            <span><strong>等待 Web 服务监听</strong><span id="serviceText">正在检测服务端口</span></span>
-          </li>
-          <li id="stepReady" class="step">
-            <span class="num">3</span>
-            <span><strong>进入同步面板</strong><span>服务就绪后自动跳转</span></span>
-          </li>
-        </ol>
-      </section>
+        <div class="hero">
+          <div class="copy">
+            <span class="eyebrow"><span class="pulse"></span> launch sequence</span>
+            <h1>
+              <span>iCloud</span>
+              <span>同步启动</span>
+              <span class="ghost" aria-hidden="true">iCloud<br />同步启动</span>
+            </h1>
+            <p class="summary" id="message">正在打开应用窗口，检测后端服务是否已经准备好。首启需要拉取镜像、安装依赖，耐心一点点，光已经在路上。</p>
+            <div class="stepLabel">
+              <small>当前进行到</small>
+              <div class="parallaxText" id="heroStep" data-text="打开应用窗口">
+                <strong>打开应用窗口</strong>
+              </div>
+            </div>
+            <div class="candidate-list" id="candidateList"></div>
+          </div>
 
-      <section id="diagnostics" class="panel diagnostics">
-        <h2>还没有连上时这样排查</h2>
-        <p class="lead">如果超过 2 分钟仍停在这里，通常是容器未启动、服务端口未映射成功，或依赖安装失败。可以在飞牛 SSH 中查看：</p>
-        <code>docker ps -a | grep fnos-icloud-sync
+          <aside class="status">
+            <div class="ring">
+              <div class="ringText">
+                <strong id="attempts">0</strong>
+                <span>CHECKS</span>
+              </div>
+            </div>
+            <ul class="steps">
+              <li id="stepWindow" class="done">
+                <span class="index">1</span>
+                <span><span class="stepTitle">应用窗口已打开</span><span class="stepMeta">入口页加载完成</span></span>
+              </li>
+              <li id="stepService" class="active">
+                <span class="index">2</span>
+                <span><span class="stepTitle">等待 Web 服务监听</span><span class="stepMeta" id="serviceText">正在检测服务端口</span></span>
+              </li>
+              <li id="stepDeps">
+                <span class="index">3</span>
+                <span><span class="stepTitle">准备 Docker 与依赖</span><span class="stepMeta">首启可能需要数分钟</span></span>
+              </li>
+              <li id="stepReady">
+                <span class="index">4</span>
+                <span><span class="stepTitle">进入同步面板</span><span class="stepMeta">服务就绪后自动跳转</span></span>
+              </li>
+            </ul>
+            <p id="elapsed">已等待 0 秒。</p>
+            <div class="actions">
+              <a class="primary" id="openLink" href="#" rel="noreferrer">立即尝试进入</a>
+              <button type="button" onclick="checkNow()">重新检测</button>
+            </div>
+          </aside>
+          <div class="diagnostics" id="diagnostics">
+            <strong>超过 2 分钟仍未进入时，可以在 SSH 里看容器状态：</strong>
+            <code>docker ps -a | grep fnos-icloud-sync
 docker logs fnos-icloud-sync --tail 200</code>
+          </div>
+          <div class="ticker">
+            <div class="tickerTrack">
+              <span>启动窗口</span>
+              <span>检测服务</span>
+              <span>等待容器</span>
+              <span>安装依赖</span>
+              <span>进入面板</span>
+              <span>启动窗口</span>
+              <span>检测服务</span>
+              <span>等待容器</span>
+              <span>安装依赖</span>
+              <span>进入面板</span>
+            </div>
+          </div>
+        </div>
       </section>
     </main>
-
     <script>
       const configuredPort = "${SERVICE_PORT}";
       const candidates = [
@@ -335,11 +628,10 @@ docker logs fnos-icloud-sync --tail 200</code>
 
       const attemptsEl = document.getElementById("attempts");
       const elapsedEl = document.getElementById("elapsed");
-      const headline = document.getElementById("headline");
       const message = document.getElementById("message");
-      const statePill = document.getElementById("statePill");
       const diagnostics = document.getElementById("diagnostics");
       const openLink = document.getElementById("openLink");
+      const heroStep = document.getElementById("heroStep");
       const candidateList = document.getElementById("candidateList");
       const serviceText = document.getElementById("serviceText");
 
@@ -348,25 +640,26 @@ docker logs fnos-icloud-sync --tail 200</code>
       candidateList.innerHTML = candidates.map((url) => "<span>候选入口：" + url + "</span>").join("");
 
       function setStep(id, className) {
-        document.getElementById(id).className = ("step " + className).trim();
+        document.getElementById(id).className = className || "";
+      }
+
+      function setCurrentStep(title, text) {
+        heroStep.dataset.text = title;
+        heroStep.querySelector("strong").textContent = title;
+        message.textContent = text;
       }
 
       function updateElapsed() {
         const seconds = Math.floor((Date.now() - startedAt) / 1000);
-        elapsedEl.textContent = seconds + " 秒";
-        if (seconds > 20 && seconds <= 120) {
-          headline.textContent = "正在等待容器与依赖";
-          message.textContent = "后端暂未响应。首次启动可能正在拉取 python:3.12-slim、创建虚拟环境或安装 icloudpd。";
-          statePill.textContent = "等待中";
+        elapsedEl.textContent = "已等待 " + seconds + " 秒，检测 " + attempts + " 次。";
+        if (seconds > 16 && seconds <= 120) {
+          setStep("stepDeps", "active");
+          setCurrentStep("准备 Docker 与依赖", "后端暂未响应，首次启动可能正在拉取镜像、创建虚拟环境或安装 icloudpd。");
         }
         if (seconds > 120) {
-          headline.textContent = "需要查看容器日志";
-          message.textContent = "后端服务仍未响应，建议打开运行日志或用 SSH 查看容器状态。";
-          statePill.textContent = "需排查";
-          statePill.style.background = "#fbe6e2";
-          statePill.style.color = "#a3403b";
           setStep("stepService", "error");
           diagnostics.classList.add("show");
+          setCurrentStep("等待人工排查", "后端服务还没有响应，建议查看容器状态和日志。");
         }
       }
 
@@ -391,11 +684,10 @@ docker logs fnos-icloud-sync --tail 200</code>
             if (await probe(rootUrl)) {
               bestUrl = rootUrl;
               openLink.href = bestUrl;
-              headline.textContent = "服务已就绪";
-              message.textContent = "正在进入 iCloud 同步配置面板。";
-              statePill.textContent = "已连接";
               setStep("stepService", "done");
+              setStep("stepDeps", "done");
               setStep("stepReady", "active");
+              setCurrentStep("进入同步面板", "后端服务已就绪，正在为你打开 iCloud 同步配置面板。");
               clearInterval(timer);
               setTimeout(() => {
                 window.location.href = bestUrl;
@@ -403,10 +695,19 @@ docker logs fnos-icloud-sync --tail 200</code>
               return;
             }
           } catch (error) {
-            // Keep trying the next candidate.
+            if (Math.floor((Date.now() - startedAt) / 1000) <= 16) {
+              setCurrentStep("等待 Web 服务监听", "正在检测服务端口，服务启动完成后会自动进入面板。");
+            }
           }
         }
       }
+
+      window.addEventListener("pointermove", (event) => {
+        const x = (event.clientX / window.innerWidth - 0.5) * 18;
+        const y = (event.clientY / window.innerHeight - 0.5) * 12;
+        document.documentElement.style.setProperty("--parallax-x", x + "px");
+        document.documentElement.style.setProperty("--parallax-y", y + "px");
+      });
 
       timer = setInterval(checkNow, 3000);
       checkNow();
