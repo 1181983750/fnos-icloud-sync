@@ -111,15 +111,21 @@
                 </div>
 
                 <div class="field">
-                  <label for="profilePathPreview">当前方案完整保存路径</label>
+                  <label for="profilePathPreview">当前方案目标保存路径</label>
                   <input id="profilePathPreview" readonly />
-                  <small class="field-help">照片、视频、备忘录会分别写入此目录下的 photos / videos / notes。</small>
+                  <small class="field-help">这是 NAS 宿主机上的目标目录；照片、视频、备忘录会分别写入此目录下的 photos / videos / notes。</small>
                 </div>
 
                 <div class="field">
                   <label for="syncRootDisplay">应用同步根目录（在飞牛应用设置中修改）</label>
                   <input id="syncRootDisplay" readonly />
                   <small id="syncRootHint" class="field-help">这是飞牛挂载给整个应用的根目录。</small>
+                </div>
+
+                <div class="field">
+                  <label for="containerPathPreview">当前容器实际写入路径</label>
+                  <input id="containerPathPreview" readonly />
+                  <small id="containerPathHint" class="field-help">容器始终写入 /data；真正落到哪个 NAS 目录取决于飞牛当前挂载。</small>
                 </div>
 
                 <div class="field two">
@@ -155,7 +161,7 @@
                     <label for="domain">iCloud 区域</label>
                     <select id="domain">
                       <option value="com">iCloud.com</option>
-                      <option value="cn">iCloud 中国区</option>
+                      <option value="cn" selected>iCloud 中国区</option>
                     </select>
                   </div>
                   <div class="field">
@@ -205,6 +211,18 @@
                   <div class="field">
                     <label for="untilFound">连续已存在后停止</label>
                     <input id="untilFound" inputmode="numeric" placeholder="留空不启用" />
+                  </div>
+                </div>
+
+                <div class="row">
+                  <div class="field">
+                    <label for="retryAttempts">失败重试次数</label>
+                    <input id="retryAttempts" inputmode="numeric" placeholder="3" />
+                  </div>
+                  <div class="field">
+                    <label for="retryDelay">重试等待秒</label>
+                    <input id="retryDelay" inputmode="numeric" placeholder="60" />
+                    <p class="field-help tooltip-help" tabindex="0" data-tip="遇到 Apple 限流、503、网络断开等导致 icloudpd 非 0 退出时，会等待后重新执行本轮照片或视频同步。">自动重试</p>
                   </div>
                 </div>
 

@@ -76,7 +76,7 @@ DEFAULT_PROFILE: dict[str, Any] = {
     "notes_enabled": False,
     "schedule_enabled": False,
     "sync_interval_minutes": 360,
-    "domain": "com",
+    "domain": "cn",
     "folder_structure": "{:%Y/%m/%d}",
     "media_mode": "copy",
     "recent": "",
@@ -84,6 +84,8 @@ DEFAULT_PROFILE: dict[str, Any] = {
     "album": "",
     "library": "",
     "size": "original",
+    "retry_attempts": 3,
+    "retry_delay_seconds": 60,
     "include_live_photos": True,
     "keep_unicode": True,
     "set_exif_datetime": True,
@@ -115,6 +117,7 @@ DEFAULT_STORAGE_ROOT: dict[str, Any] = {
     "authorized_paths": [],
     "updated_at": "",
 }
+
 
 config_lock = threading.RLock()
 job_lock = threading.RLock()
@@ -255,6 +258,13 @@ def normalize_data_subdir(value: Any, fallback: str, profile_id: str) -> str:
     return "/".join(parts[:6]) or fallback
 
 
+def normalize_root_path(value: Any) -> str:
+    text = str(value or "").strip().replace("\\", "/")
+    while len(text) > 1 and text.endswith("/"):
+        text = text[:-1]
+    return text
+
+
 def normalize_profile(profile: dict[str, Any]) -> None:
     profile["id"] = str(profile.get("id") or ("p_" + uuid.uuid4().hex[:10]))
     profile["name"] = str(profile.get("name") or profile.get("apple_id") or "未命名方案").strip()
@@ -269,6 +279,8 @@ def normalize_profile(profile: dict[str, Any]) -> None:
     profile["sync_interval_minutes"] = max(15, int_or_default(profile.get("sync_interval_minutes"), 360))
     profile["recent"] = normalize_number_string(profile.get("recent"))
     profile["until_found"] = normalize_number_string(profile.get("until_found"))
+    profile["retry_attempts"] = clamp_int(profile.get("retry_attempts"), 3, 0, 10)
+    profile["retry_delay_seconds"] = clamp_int(profile.get("retry_delay_seconds"), 60, 0, 3600)
     for key in [
         "photos_enabled",
         "videos_enabled",
@@ -441,6 +453,10 @@ def int_or_default(value: Any, default: int) -> int:
         return default
 
 
+def clamp_int(value: Any, default: int, minimum: int, maximum: int) -> int:
+    return min(max(int_or_default(value, default), minimum), maximum)
+
+
 def normalize_number_string(value: Any) -> str:
     text = str(value or "").strip()
     if not text:
@@ -475,20 +491,21 @@ def save_state(state: dict[str, Any]) -> None:
 
 def load_storage_root() -> dict[str, Any]:
     raw = read_json(STORAGE_ROOT_FILE, DEFAULT_STORAGE_ROOT)
-    selected_root_path = str(raw.get("selected_root_path") or SYNC_ROOT_HOST_PATH).strip() or SYNC_ROOT_HOST_PATH
+    selected_root_path = normalize_root_path(raw.get("selected_root_path") or SYNC_ROOT_HOST_PATH) or normalize_root_path(SYNC_ROOT_HOST_PATH)
+    applied_root_path = normalize_root_path(SYNC_ROOT_HOST_PATH)
     authorized_paths = raw.get("authorized_paths", [])
     if not isinstance(authorized_paths, list):
         authorized_paths = []
 
     normalized_paths: list[str] = []
     for item in authorized_paths:
-        text = str(item or "").strip()
+        text = normalize_root_path(item)
         if text:
             normalized_paths.append(text)
 
     return {
         "selected_root_path": selected_root_path,
-        "using_default_root": bool(raw.get("using_default_root", selected_root_path == SYNC_ROOT_HOST_PATH)),
+        "using_default_root": bool(raw.get("using_default_root", selected_root_path == applied_root_path)),
         "authorized_paths": normalized_paths,
         "updated_at": str(raw.get("updated_at") or ""),
     }
@@ -586,6 +603,15 @@ def resolve_command(name: str) -> str | None:
 
 def command_exists(name: str) -> bool:
     return resolve_command(name) is not None
+
+
+def wait_for_retry(job: Job, seconds: int) -> bool:
+    deadline = time.time() + max(0, seconds)
+    while time.time() < deadline:
+        if job.status == "stopped":
+            return False
+        time.sleep(min(1, deadline - time.time()))
+    return job.status != "stopped"
 
 
 def build_base_icloudpd_args(
@@ -751,16 +777,36 @@ def run_media_job(job: Job, profile_id: str) -> None:
         commands.append(("视频", args))
 
     final_code = 0
+    retry_attempts = max(0, int_or_default(profile.get("retry_attempts"), 3))
+    retry_delay_seconds = max(0, int_or_default(profile.get("retry_delay_seconds"), 60))
     for title, args in commands:
-        job.append(f"开始同步{title}: {profile['name']}")
-        code = run_process(job, args)
+        code = 1
+        for attempt in range(retry_attempts + 1):
+            if job.status == "stopped":
+                code = -1
+                break
+            if attempt == 0:
+                job.append(f"开始同步{title}: {profile['name']}")
+            else:
+                job.append(f"第 {attempt + 1}/{retry_attempts + 1} 次重试同步{title}")
+            code = run_process(job, args)
+            if code == 0:
+                break
+            if job.status == "stopped":
+                break
+            if attempt < retry_attempts:
+                job.append(f"同步{title}失败，返回码 {code}。{retry_delay_seconds} 秒后自动重试。")
+                if not wait_for_retry(job, retry_delay_seconds):
+                    code = -1
+                    break
         final_code = code
         if code != 0:
             break
 
     if final_code == 0:
         update_profile_state(profile_id, {"last_media_sync": utc_now()})
-    finish_job(job, "success" if final_code == 0 else "failed", return_code=final_code)
+    if job.status != "stopped":
+        finish_job(job, "success" if final_code == 0 else "failed", return_code=final_code)
 
 
 def decode_header_value(value: str | None) -> str:
@@ -1007,6 +1053,7 @@ def status_payload(profile_id: str | None = None) -> dict[str, Any]:
     profile = get_profile(config, profile_id)
     state = get_profile_state(profile["id"])
     storage_root = load_storage_root()
+    applied_root_path = normalize_root_path(SYNC_ROOT_HOST_PATH)
     icloudpd_path = resolve_command("icloudpd")
     with job_lock:
         job = current_job.to_dict() if current_job else None
@@ -1022,12 +1069,12 @@ def status_payload(profile_id: str | None = None) -> dict[str, Any]:
         "bytes": storage["bytes"],
         "storage": {
             "selected_root_path": storage_root["selected_root_path"],
-            "applied_root_path": SYNC_ROOT_HOST_PATH,
+            "applied_root_path": applied_root_path,
             "using_default_root": storage_root["using_default_root"],
             "authorized_paths": storage_root["authorized_paths"],
             "updated_at": storage_root["updated_at"],
             "container_root": str(DATA_DIR),
-            "restart_required": storage_root["selected_root_path"] != SYNC_ROOT_HOST_PATH,
+            "restart_required": storage_root["selected_root_path"] != applied_root_path,
         },
         "icloudpd_available": icloudpd_path is not None,
         "icloudpd_path": icloudpd_path or "",

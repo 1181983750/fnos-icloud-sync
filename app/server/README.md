@@ -22,4 +22,6 @@
 - `media_mode=copy` 只下载新增内容，不删除 iCloud 云端。
 - `media_mode=mirror` 使用 `--auto-delete`，只让 NAS 本地跟随云端删除。
 - `media_mode=move` 使用 `--keep-icloud-recent-days 0`，会请求删除 iCloud 云端对应媒体，是高风险模式。
+- 媒体同步失败会按 `retry_attempts` 和 `retry_delay_seconds` 自动重试；重试等待期间如果用户停止任务，不应继续拉起下一次同步。
+- 当前内置 `icloudpd==1.32.3` 不支持 `--download-delay` 和 `--max-concurrent-downloads`，不要把这些参数写进运行命令；多线程和下载延时节流放在未来实现规划中。
 - 认证任务不应带媒体删除参数，避免认证阶段触发危险行为。

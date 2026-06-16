@@ -16,6 +16,8 @@ const fields = {
   size: document.querySelector("#size"),
   recent: document.querySelector("#recent"),
   untilFound: document.querySelector("#untilFound"),
+  retryAttempts: document.querySelector("#retryAttempts"),
+  retryDelay: document.querySelector("#retryDelay"),
   album: document.querySelector("#album"),
   library: document.querySelector("#library"),
   includeLivePhotos: document.querySelector("#includeLivePhotos"),
@@ -33,6 +35,7 @@ const els = {
   form: document.querySelector("#configForm"),
   addProfileBtn: document.querySelector("#addProfileBtn"),
   deleteProfileBtn: document.querySelector("#deleteProfileBtn"),
+  saveProfileBtn: document.querySelector("#configForm button[type='submit']"),
   profileList: document.querySelector("#profileList"),
   activeProfileTitle: document.querySelector("#activeProfileTitle"),
   guideHint: document.querySelector("#guideHint"),
@@ -61,6 +64,8 @@ const els = {
   dataPathMeta: document.querySelector("#dataPathMeta"),
   syncRootDisplay: document.querySelector("#syncRootDisplay"),
   syncRootHint: document.querySelector("#syncRootHint"),
+  containerPathPreview: document.querySelector("#containerPathPreview"),
+  containerPathHint: document.querySelector("#containerPathHint"),
   cloudDeleteWarning: document.querySelector("#cloudDeleteWarning"),
   lastSync: document.querySelector("#lastSync"),
   logPanel: document.querySelector(".log-panel"),
@@ -74,6 +79,9 @@ let appState = {
   activeProfileId: "",
   status: null,
   selectedGuideStep: "",
+  isRunning: false,
+  logAutoFollow: true,
+  lastJobId: "",
 };
 let toastTimer = null;
 
@@ -129,12 +137,21 @@ function currentProfileSubdir() {
 
 function updateProfilePathPreview(status = appState.status) {
   const root =
-    status?.storage?.applied_root_path ||
     status?.storage?.selected_root_path ||
+    status?.storage?.applied_root_path ||
     status?.storage?.container_root ||
     "";
   const preview = joinDisplayPath(root, currentProfileSubdir());
   fields.profilePathPreview.value = preview;
+  return preview;
+}
+
+function updateContainerPathPreview(status = appState.status) {
+  const writeRoot = status?.storage?.container_root || status?.paths?.data || "";
+  const preview = joinDisplayPath(writeRoot, currentProfileSubdir());
+  if (els.containerPathPreview) {
+    els.containerPathPreview.value = preview;
+  }
   return preview;
 }
 
@@ -298,6 +315,7 @@ function renderProfiles() {
     flags.textContent = `${enabled.length ? enabled.join(" / ") : "未选择同步内容"} · ${folder}`;
 
     button.append(title, account, flags);
+    button.disabled = appState.isRunning;
     button.addEventListener("click", () => selectProfile(profile.id));
     els.profileList.append(button);
   });
@@ -311,6 +329,7 @@ function applyProfile(profile) {
   fields.appleId.value = profile.apple_id || "";
   fields.profileSubdir.value = profile.data_subdir || "";
   updateProfilePathPreview();
+  updateContainerPathPreview();
   fields.authPassword.value = "";
   fields.storePassword.checked = Boolean(profile.store_password);
   fields.photosEnabled.checked = Boolean(profile.photos_enabled);
@@ -318,12 +337,14 @@ function applyProfile(profile) {
   fields.notesEnabled.checked = Boolean(profile.notes_enabled);
   fields.scheduleEnabled.checked = Boolean(profile.schedule_enabled);
   fields.syncInterval.value = profile.sync_interval_minutes || 360;
-  fields.domain.value = profile.domain || "com";
+  fields.domain.value = profile.domain || "cn";
   fields.mediaMode.value = profile.media_mode || "copy";
   fields.folderStructure.value = profile.folder_structure || "{:%Y/%m/%d}";
   fields.size.value = profile.size || "original";
   fields.recent.value = profile.recent || "";
   fields.untilFound.value = profile.until_found || "";
+  fields.retryAttempts.value = profile.retry_attempts ?? 3;
+  fields.retryDelay.value = profile.retry_delay_seconds ?? 60;
   fields.album.value = profile.album || "";
   fields.library.value = profile.library || "";
   fields.includeLivePhotos.checked = Boolean(profile.include_live_photos);
@@ -339,7 +360,7 @@ function applyProfile(profile) {
   fields.noteFormat.value = notes.format || "markdown";
 
   els.activeProfileTitle.textContent = profile.name || "当前方案";
-  els.deleteProfileBtn.disabled = (appState.config?.profiles || []).length <= 1;
+  els.deleteProfileBtn.disabled = appState.isRunning || (appState.config?.profiles || []).length <= 1;
   updateMediaModeWarning();
   updateGuide();
 }
@@ -362,6 +383,8 @@ function collectConfig(includePasswords = false) {
     size: fields.size.value,
     recent: fields.recent.value.trim(),
     until_found: fields.untilFound.value.trim(),
+    retry_attempts: fields.retryAttempts.value.trim(),
+    retry_delay_seconds: fields.retryDelay.value.trim(),
     album: fields.album.value.trim(),
     library: fields.library.value.trim(),
     include_live_photos: fields.includeLivePhotos.checked,
@@ -387,15 +410,42 @@ function collectConfig(includePasswords = false) {
   return payload;
 }
 
+function isJobRunning() {
+  return appState.isRunning;
+}
+
+function isLogNearBottom() {
+  const distance = els.logOutput.scrollHeight - els.logOutput.scrollTop - els.logOutput.clientHeight;
+  return distance < 24;
+}
+
 function setRunning(isRunning) {
+  appState.isRunning = isRunning;
+  Object.values(fields)
+    .filter(Boolean)
+    .forEach((field) => {
+      field.disabled = isRunning;
+    });
+  els.form.classList.toggle("config-locked", isRunning);
+  els.addProfileBtn.disabled = isRunning;
+  els.saveProfileBtn.disabled = isRunning;
+  els.deleteProfileBtn.disabled = isRunning || (appState.config?.profiles || []).length <= 1;
   els.authBtn.disabled = isRunning;
   els.mediaSyncBtn.disabled = isRunning;
   els.notesSyncBtn.disabled = isRunning;
   els.stopJob.disabled = !isRunning;
+  document.querySelectorAll(".profile-item").forEach((item) => {
+    item.disabled = isRunning;
+  });
 }
 
 function renderJob(job) {
   const status = job?.status || "idle";
+  const jobId = job?.id || "";
+  if (jobId && jobId !== appState.lastJobId) {
+    appState.logAutoFollow = true;
+    appState.lastJobId = jobId;
+  }
   const labels = {
     idle: "空闲",
     running: "运行中",
@@ -414,8 +464,11 @@ function renderJob(job) {
   setRunning(status === "running");
 
   if (Array.isArray(job?.log) && job.log.length) {
+    const shouldFollow = appState.logAutoFollow || isLogNearBottom();
     els.logOutput.textContent = job.log.join("\n");
-    els.logOutput.scrollTop = els.logOutput.scrollHeight;
+    if (shouldFollow) {
+      els.logOutput.scrollTop = els.logOutput.scrollHeight;
+    }
   }
 }
 
@@ -431,18 +484,24 @@ function renderStatus(status) {
   const restartRequired = Boolean(status.storage?.restart_required);
   const rootMode = status.storage?.using_default_root ? "当前目标为应用共享目录" : "当前目标为飞牛已授权目录";
   let rootHint = status.storage?.using_default_root
-    ? "如需切到任意目录，请到飞牛的应用设置里为本应用授权目录并选择。"
-    : `已检测到 ${authorizedCount} 个授权目录，可在飞牛应用设置里切换。`;
+    ? "当前使用默认应用共享目录。如需写到外接存储或其他目录，请到飞牛应用设置里为本应用授权目录并选择。"
+    : `已选择飞牛授权目录；已检测到 ${authorizedCount} 个授权目录，可在飞牛应用设置里切换。`;
 
   if (restartRequired) {
-    rootHint = `已选择新目录，但当前容器仍挂载在 ${appliedRoot}。请重启应用后生效。`;
+    rootHint = `已选择 ${selectedRoot}，但当前容器仍挂载在 ${appliedRoot}。请在应用中心停止后重新启动，让 /data 重新挂载到新目录。`;
   }
 
   const profilePath = updateProfilePathPreview(status);
+  const containerPath = updateContainerPathPreview(status);
   els.dataPath.textContent = profilePath;
-  els.dataPathMeta.textContent = `${rootMode} · 应用根目录 ${appliedRoot} · 容器内当前目录 ${status.paths?.data || "-"}`;
+  els.dataPathMeta.textContent = `${rootMode} · 容器写入 ${containerPath} · 当前挂载来源 ${appliedRoot}`;
   els.syncRootDisplay.value = selectedRoot;
   els.syncRootHint.textContent = rootHint;
+  if (els.containerPathHint) {
+    els.containerPathHint.textContent = restartRequired
+      ? `现在仍会写入旧挂载 ${appliedRoot} 对应的位置；重启应用后才会落到 ${selectedRoot}。`
+      : `容器内 ${containerPath} 已映射到 NAS 目录 ${profilePath}。`;
+  }
 
   const lastMedia = status.state?.last_media_sync || "从未同步媒体";
   const lastNotes = status.state?.last_notes_sync || "从未导出备忘录";
@@ -526,6 +585,10 @@ async function saveCurrentProfile(includePasswords = true, options = {}) {
 }
 
 async function selectProfile(profileId) {
+  if (isJobRunning()) {
+    showToast("任务运行中，配置已锁定");
+    return;
+  }
   try {
     releaseGuideStep();
     const config = await api(`/api/profiles/${encodeURIComponent(profileId)}/select`, {
@@ -554,6 +617,10 @@ function releaseGuideStep() {
 }
 
 els.addProfileBtn.addEventListener("click", async () => {
+  if (isJobRunning()) {
+    showToast("任务运行中，暂不能新增方案");
+    return;
+  }
   try {
     releaseGuideStep();
     const config = await api("/api/profiles", {
@@ -574,6 +641,10 @@ els.addProfileBtn.addEventListener("click", async () => {
 });
 
 els.deleteProfileBtn.addEventListener("click", async () => {
+  if (isJobRunning()) {
+    showToast("任务运行中，暂不能删除方案");
+    return;
+  }
   const profile = activeProfile();
   if (!profile) {
     return;
@@ -603,6 +674,10 @@ els.deleteProfileBtn.addEventListener("click", async () => {
 
 els.form.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (isJobRunning()) {
+    showToast("任务运行中，配置已锁定");
+    return;
+  }
   try {
     releaseGuideStep();
     const config = await saveCurrentProfile(true);
@@ -631,6 +706,8 @@ els.form.addEventListener("submit", async (event) => {
   fields.mediaMode,
   fields.scheduleEnabled,
   fields.syncInterval,
+  fields.retryAttempts,
+  fields.retryDelay,
   fields.imapUser,
   fields.imapPassword,
 ].forEach((field) => {
@@ -639,9 +716,14 @@ els.form.addEventListener("submit", async (event) => {
     releaseGuideStep();
     if (field === fields.profileSubdir) {
       updateProfilePathPreview();
+      updateContainerPathPreview();
     }
     updateGuide();
   });
+});
+
+els.logOutput.addEventListener("scroll", () => {
+  appState.logAutoFollow = isLogNearBottom();
 });
 
 Object.entries(guideButtons).forEach(([step, button]) => {
