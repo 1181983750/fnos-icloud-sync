@@ -165,7 +165,7 @@
                       <option value="mirror">同步本地删除：云端删了，本地也删</option>
                       <option value="move">下载后删除 iCloud 云端</option>
                     </select>
-                    <p class="field-help">默认只下载到 NAS，不改动 iCloud 云端。</p>
+                    <p class="field-help tooltip-help" tabindex="0" data-tip="默认只下载到 NAS，不改动 iCloud 云端。">模式说明</p>
                   </div>
                 </div>
 
@@ -178,11 +178,13 @@
                   <div class="field">
                     <label for="folderStructure">目录结构</label>
                     <input id="folderStructure" placeholder="{:%Y/%m/%d}" />
-                    <div class="hint-card">
-                      <strong>用于决定照片在 NAS 里的分层目录。</strong>
-                      <span>常用写法：<code>{:%Y/%m/%d}</code> 会按拍摄日期保存为 <code>2026/06/16</code>。</span>
-                      <span>支持年月日占位：<code>%Y</code> 四位年份、<code>%m</code> 月份、<code>%d</code> 日期；可以用斜杠组合多级目录。</span>
-                      <span>也可以写固定目录，例如 <code>photos/{:%Y-%m}</code>，表示按月份归档。</span>
+                    <div class="hint-card" tabindex="0">
+                      <div class="hint-content">
+                        <strong>用于决定照片在 NAS 里的分层目录。</strong>
+                        <span>常用写法：<code>{:%Y/%m/%d}</code> 会按拍摄日期保存为 <code>2026/06/16</code>。</span>
+                        <span>支持年月日占位：<code>%Y</code> 四位年份、<code>%m</code> 月份、<code>%d</code> 日期；可以用斜杠组合多级目录。</span>
+                        <span>也可以写固定目录，例如 <code>photos/{:%Y-%m}</code>，表示按月份归档。</span>
+                      </div>
                     </div>
                   </div>
                   <div class="field">
@@ -210,10 +212,12 @@
                   <div class="field">
                     <label for="album">相册</label>
                     <input id="album" placeholder="留空表示全部" />
-                    <div class="hint-card">
-                      <strong>只同步某个 iCloud 相册时填写。</strong>
-                      <span>留空表示同步全部照片；填写时请输入 iCloud 里看到的相册名称，例如 <code>家庭</code>、<code>旅行</code>。</span>
-                      <span>名称要尽量和 iCloud 相册一致。多个相册建议新建多个同步方案分别配置。</span>
+                    <div class="hint-card" tabindex="0">
+                      <div class="hint-content">
+                        <strong>只同步某个 iCloud 相册时填写。</strong>
+                        <span>留空表示同步全部照片；填写时请输入 iCloud 里看到的相册名称，例如 <code>家庭</code>、<code>旅行</code>。</span>
+                        <span>名称要尽量和 iCloud 相册一致。多个相册建议新建多个同步方案分别配置。</span>
+                      </div>
                     </div>
                   </div>
                   <div class="field">
@@ -223,10 +227,12 @@
                       <option value="Personal Library">Personal Library（个人资料库）</option>
                       <option value="Shared Library">Shared Library（共享资料库）</option>
                     </select>
-                    <div class="hint-card">
-                      <strong>用于区分 iCloud 个人资料库和共享资料库。</strong>
-                      <span>不确定就选“自动选择 / 全部资料库”，这是最安全的默认值。</span>
-                      <span>如果你开启了 iCloud 共享图库，并且只想同步其中一边，再选择个人或共享资料库。</span>
+                    <div class="hint-card" tabindex="0">
+                      <div class="hint-content">
+                        <strong>用于区分 iCloud 个人资料库和共享资料库。</strong>
+                        <span>不确定就选“自动选择 / 全部资料库”，这是最安全的默认值。</span>
+                        <span>如果你开启了 iCloud 共享图库，并且只想同步其中一边，再选择个人或共享资料库。</span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -280,7 +286,7 @@
 
               <section id="notesSection" class="notes-box guide-section guide-section-tight">
                 <h3>备忘录 IMAP</h3>
-                <p class="section-note">只在需要导出 iCloud 备忘录时填写。服务器、端口和文件夹已使用 iCloud 默认值，通常不用改。</p>
+                <p class="section-note tooltip-help" tabindex="0" data-tip="只在需要导出 iCloud 备忘录时填写。服务器、端口和文件夹已使用 iCloud 默认值，通常不用改。">备忘录说明</p>
                 <div class="field">
                   <label for="imapUser">用户名</label>
                   <input id="imapUser" autocomplete="username" placeholder="通常为 Apple ID" />
@@ -288,7 +294,7 @@
                 <div class="field">
                   <label for="imapPassword">App 专用密码</label>
                   <input id="imapPassword" type="password" autocomplete="current-password" placeholder="留空则保留现有密码" />
-                  <small class="field-help">这里建议使用 Apple 账号生成的 App 专用密码，不建议填写 Apple ID 登录密码。</small>
+                  <small class="field-help tooltip-help" tabindex="0" data-tip="这里建议使用 Apple 账号生成的 App 专用密码，不建议填写 Apple ID 登录密码。">密码说明</small>
                 </div>
                 <div class="row">
                   <div class="field">
@@ -297,7 +303,7 @@
                       <option value="markdown">Markdown</option>
                       <option value="html">HTML</option>
                     </select>
-                    <small class="field-help">Markdown 适合长期保存和二次整理；HTML 更接近网页查看效果。</small>
+                    <small class="field-help tooltip-help" tabindex="0" data-tip="Markdown 适合长期保存和二次整理；HTML 更接近网页查看效果。">格式说明</small>
                   </div>
                 </div>
                 <details class="advanced-options">
@@ -326,7 +332,7 @@
                       <option value="备忘录"></option>
                       <option value="Notes/备忘录"></option>
                     </datalist>
-                    <small class="field-help">默认是 <code>Notes</code>。如果导出为空，可以按 iCloud Mail 里看到的文件夹名称改成“备忘录”等。</small>
+                    <small class="field-help tooltip-help" tabindex="0" data-tip="默认是 Notes。如果导出为空，可以按 iCloud Mail 里看到的文件夹名称改成“备忘录”等。">文件夹说明</small>
                   </div>
                 </details>
               </section>

@@ -4,15 +4,15 @@
 
 - 应用名称：iCloud 同步
 - 应用包名：icloud-sync
-- 当前版本：0.2.27
+- 当前版本：0.2.28
 - 应用类型：Docker 型 FPK 应用
 - 支持平台：x86_64
 - 最低系统版本：fnOS 1.1.8
 - 服务端口：8080
 - GitHub 仓库：https://github.com/1181983750/fnos-icloud-sync
-- Release 地址：https://github.com/1181983750/fnos-icloud-sync/releases/tag/v0.2.27
-- FPK 下载地址：https://github.com/1181983750/fnos-icloud-sync/releases/download/v0.2.27/icloud-sync-0.2.27.fpk
-- FPK SHA256：7583F239273925A9EEA47AE18B50F6F3C343D6CE022E27AC30FA922FF71483F9
+- Release 地址：https://github.com/1181983750/fnos-icloud-sync/releases/tag/v0.2.28
+- FPK 下载地址：https://github.com/1181983750/fnos-icloud-sync/releases/download/v0.2.28/icloud-sync-0.2.28.fpk
+- FPK SHA256：329F93508B182E8F68382167757874B4BBE84F340B4B469AF3BF71FF3050EF00
 
 ## 应用简介
 
@@ -67,4 +67,4 @@ iCloud 同步是在飞牛 NAS 上运行的 iCloud 数据同步工具。应用通
 
 ## Release 说明
 
-0.2.27 在同步范围表单中补充目录结构、相册和资料库说明，将资料库改为下拉选择，把备忘录 IMAP 默认项折叠为高级设置，并在运行日志下方新增控制台输入栏。
+0.2.28 将同步范围和备忘录区域的常驻说明改为 hover/focus 触发的 CSS3 动效玻璃提示，减少页面占用并保留说明可发现性。
