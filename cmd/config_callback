@@ -8,7 +8,9 @@ LOG_FILE="${LOG_DIR}/config_callback.log"
     . "$(cd "$(dirname "$0")" 2>/dev/null && pwd)/config_shared.sh"
 
     load_accessible_paths
-    selected_root="$(normalize_selected_root "${wizard_sync_root_path:-}")"
+    requested_root="${wizard_sync_root_path:-}"
+    selected_root="$(normalize_selected_root "${requested_root}")"
+    log_root_selection "config_callback" "$requested_root" "$selected_root"
 
     mkdir -p "${TRIM_PKGVAR:-${PACKAGE_ROOT}/var}/config" "${TRIM_PKGVAR:-${PACKAGE_ROOT}/var}/logs" 2>/dev/null || true
     mkdir -p "${DEFAULT_SYNC_ROOT}" 2>/dev/null || true

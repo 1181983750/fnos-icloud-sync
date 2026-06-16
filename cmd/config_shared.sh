@@ -6,7 +6,8 @@ APP_NAME="${TRIM_APPNAME:-icloud-sync}"
 DEFAULT_SYNC_ROOT="/var/apps/${APP_NAME}/shares/icloud"
 LEGACY_SYNC_ROOT="/var/apps/${APP_NAME}/shares/icloud-photos"
 WIZARD_CONFIG_FILE="${PACKAGE_ROOT}/wizard/config"
-COMPOSE_ENV_FILE="${PACKAGE_ROOT}/app/docker/.env"
+COMPOSE_ENV_FILES="${PACKAGE_ROOT}/app/docker/.env
+${PACKAGE_ROOT}/app/.env"
 STORAGE_DIR="${TRIM_PKGVAR:-${PACKAGE_ROOT}/var}/config"
 STORAGE_FILE="${STORAGE_DIR}/storage_root.json"
 ACCESSIBLE_PATHS=""
@@ -69,6 +70,10 @@ accessible_path_count() {
     else
         printf '%s\n' "$ACCESSIBLE_PATHS" | awk 'END { print NR }'
     fi
+}
+
+log_config_message() {
+    printf '[config] %s\n' "$1"
 }
 
 current_selected_root() {
@@ -152,12 +157,14 @@ EOF
     } > "${STORAGE_FILE}" 2>/dev/null || true
 }
 
-write_compose_env() {
-    selected_root="$1"
+write_compose_env_file() {
+    env_file="$1"
+    selected_root="$2"
     env_dir=""
 
-    env_dir="$(dirname "${COMPOSE_ENV_FILE}")"
+    env_dir="$(dirname "${env_file}")"
     if [ ! -d "$env_dir" ]; then
+        log_config_message "skip compose env target (directory missing): ${env_file}"
         return 0
     fi
 
@@ -170,7 +177,34 @@ write_compose_env() {
         if [ -n "${TRIM_SERVICE_PORT:-}" ]; then
             printf "TRIM_SERVICE_PORT='%s'\n" "$(dotenv_escape "$TRIM_SERVICE_PORT")"
         fi
-    } > "${COMPOSE_ENV_FILE}" 2>/dev/null || true
+    } > "${env_file}" 2>/dev/null || {
+        log_config_message "failed to write compose env: ${env_file}"
+        return 0
+    }
+
+    log_config_message "wrote compose env: ${env_file}"
+}
+
+write_compose_env() {
+    selected_root="$1"
+    env_file=""
+
+    while IFS= read -r env_file; do
+        if [ -n "$env_file" ]; then
+            write_compose_env_file "$env_file" "$selected_root"
+        fi
+    done <<EOF
+$COMPOSE_ENV_FILES
+EOF
+}
+
+log_root_selection() {
+    source_name="$1"
+    requested_root="$2"
+    selected_root="$3"
+    path_count="$(accessible_path_count)"
+
+    log_config_message "${source_name}: requested='${requested_root:-<empty>}' selected='${selected_root}' authorized_count=${path_count}"
 }
 
 write_wizard_config() {

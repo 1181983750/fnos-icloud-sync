@@ -8,7 +8,9 @@ LOG_FILE="${LOG_DIR}/config_init.log"
     . "$(cd "$(dirname "$0")" 2>/dev/null && pwd)/config_shared.sh"
 
     load_accessible_paths
-    selected_root="$(normalize_selected_root "$(current_selected_root)")"
+    requested_root="$(current_selected_root)"
+    selected_root="$(normalize_selected_root "${requested_root}")"
+    log_root_selection "config_init" "$requested_root" "$selected_root"
     write_storage_root_json "$selected_root"
     write_compose_env "$selected_root"
     write_wizard_config "$selected_root"
