@@ -79,6 +79,7 @@ let appState = {
   status: null,
   selectedGuideStep: "",
   isRunning: false,
+  storageRestartRequired: false,
   logAutoFollow: true,
   lastJobId: "",
 };
@@ -309,7 +310,6 @@ function renderProfiles() {
     flags.textContent = `${enabled.length ? enabled.join(" / ") : "未选择同步内容"} · ${folder}`;
 
     button.append(title, account, flags);
-    button.disabled = appState.isRunning;
     button.addEventListener("click", () => selectProfile(profile.id));
     els.profileList.append(button);
   });
@@ -407,6 +407,14 @@ function isJobRunning() {
   return appState.isRunning;
 }
 
+function isStorageRestartRequired() {
+  return Boolean(appState.storageRestartRequired);
+}
+
+function showStorageRestartToast() {
+  showToast("同步根目录还没有生效，请在应用中心或 Docker Compose 停止后重新启动本应用");
+}
+
 function isLogNearBottom() {
   const distance = els.logOutput.scrollHeight - els.logOutput.scrollTop - els.logOutput.clientHeight;
   return distance < 24;
@@ -414,6 +422,7 @@ function isLogNearBottom() {
 
 function setRunning(isRunning) {
   appState.isRunning = isRunning;
+  const storageRestartRequired = isStorageRestartRequired();
   Object.values(fields)
     .filter(Boolean)
     .forEach((field) => {
@@ -424,12 +433,9 @@ function setRunning(isRunning) {
   els.saveProfileBtn.disabled = isRunning;
   els.deleteProfileBtn.disabled = isRunning || (appState.config?.profiles || []).length <= 1;
   els.authBtn.disabled = isRunning;
-  els.mediaSyncBtn.disabled = isRunning;
-  els.notesSyncBtn.disabled = isRunning;
+  els.mediaSyncBtn.disabled = isRunning || storageRestartRequired;
+  els.notesSyncBtn.disabled = isRunning || storageRestartRequired;
   els.stopJob.disabled = !isRunning;
-  document.querySelectorAll(".profile-item").forEach((item) => {
-    item.disabled = isRunning;
-  });
 }
 
 function renderJob(job) {
@@ -473,6 +479,7 @@ function renderStatus(status) {
 
   const selectedRoot = status.storage?.selected_root_path || status.paths?.data || "-";
   const restartRequired = Boolean(status.storage?.restart_required);
+  appState.storageRestartRequired = restartRequired;
   const profilePath = updateProfilePathPreview(status);
   const statusPrefix = restartRequired
     ? `已选择 ${selectedRoot}，但本次启动仍在使用旧位置；请在应用中心停止后重新启动本应用，资料才会保存到上方目录。`
@@ -565,10 +572,6 @@ async function saveCurrentProfile(includePasswords = true, options = {}) {
 }
 
 async function selectProfile(profileId) {
-  if (isJobRunning()) {
-    showToast("任务运行中，配置已锁定");
-    return;
-  }
   try {
     releaseGuideStep();
     const config = await api(`/api/profiles/${encodeURIComponent(profileId)}/select`, {
@@ -735,6 +738,10 @@ els.authBtn.addEventListener("click", async () => {
 
 els.mediaSyncBtn.addEventListener("click", async () => {
   try {
+    if (isStorageRestartRequired()) {
+      showStorageRestartToast();
+      return;
+    }
     releaseGuideStep();
     const nextConfig = collectConfig(true);
     if (isCloudDeleteMode(nextConfig.media_mode) && !confirmCloudDelete("开始媒体同步")) {
@@ -761,6 +768,10 @@ fields.mediaMode.addEventListener("change", updateMediaModeWarning);
 
 els.notesSyncBtn.addEventListener("click", async () => {
   try {
+    if (isStorageRestartRequired()) {
+      showStorageRestartToast();
+      return;
+    }
     releaseGuideStep();
     const config = await saveCurrentProfile(true);
     if (!config) {

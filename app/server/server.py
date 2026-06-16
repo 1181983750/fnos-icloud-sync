@@ -491,8 +491,11 @@ def save_state(state: dict[str, Any]) -> None:
 
 def load_storage_root() -> dict[str, Any]:
     raw = read_json(STORAGE_ROOT_FILE, DEFAULT_STORAGE_ROOT)
-    selected_root_path = normalize_root_path(raw.get("selected_root_path") or SYNC_ROOT_HOST_PATH) or normalize_root_path(SYNC_ROOT_HOST_PATH)
     applied_root_path = normalize_root_path(SYNC_ROOT_HOST_PATH)
+    selected_root_path = normalize_root_path(raw.get("selected_root_path") or applied_root_path) or applied_root_path
+    default_root_path = normalize_root_path(DEFAULT_STORAGE_ROOT["selected_root_path"])
+    if selected_root_path == default_root_path and applied_root_path != default_root_path:
+        selected_root_path = applied_root_path
     authorized_paths = raw.get("authorized_paths", [])
     if not isinstance(authorized_paths, list):
         authorized_paths = []
@@ -1054,6 +1057,7 @@ def status_payload(profile_id: str | None = None) -> dict[str, Any]:
     state = get_profile_state(profile["id"])
     storage_root = load_storage_root()
     applied_root_path = normalize_root_path(SYNC_ROOT_HOST_PATH)
+    restart_required = storage_root["selected_root_path"] != applied_root_path
     icloudpd_path = resolve_command("icloudpd")
     with job_lock:
         job = current_job.to_dict() if current_job else None
@@ -1074,12 +1078,24 @@ def status_payload(profile_id: str | None = None) -> dict[str, Any]:
             "authorized_paths": storage_root["authorized_paths"],
             "updated_at": storage_root["updated_at"],
             "container_root": str(DATA_DIR),
-            "restart_required": storage_root["selected_root_path"] != applied_root_path,
+            "restart_required": restart_required,
         },
         "icloudpd_available": icloudpd_path is not None,
         "icloudpd_path": icloudpd_path or "",
         "python_executable": sys.executable,
     }
+
+
+def storage_mount_needs_recreate() -> bool:
+    storage_root = load_storage_root()
+    applied_root_path = normalize_root_path(SYNC_ROOT_HOST_PATH)
+    return storage_root["selected_root_path"] != applied_root_path
+
+
+def storage_mount_error_response():
+    return jsonify({
+        "error": "同步根目录还没有生效。请在飞牛应用中心停止后重新启动本应用，等容器重新创建挂载后再开始同步。"
+    }), 409
 
 
 def scheduler_loop() -> None:
@@ -1218,6 +1234,8 @@ def api_auth():
 def api_sync_media():
     payload = request.get_json(force=True, silent=True) or {}
     profile_id = str(payload.get("profile_id") or load_config().get("active_profile_id"))
+    if storage_mount_needs_recreate():
+        return storage_mount_error_response()
     try:
         job = start_job("media-sync", profile_id, run_media_job)
         return jsonify(job.to_dict())
@@ -1229,6 +1247,8 @@ def api_sync_media():
 def api_sync_notes():
     payload = request.get_json(force=True, silent=True) or {}
     profile_id = str(payload.get("profile_id") or load_config().get("active_profile_id"))
+    if storage_mount_needs_recreate():
+        return storage_mount_error_response()
     try:
         job = start_job("notes-export", profile_id, run_notes_job)
         return jsonify(job.to_dict())
