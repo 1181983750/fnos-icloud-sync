@@ -1,30 +1,186 @@
 #!/bin/bash
 
-FILE_PATH="${TRIM_APPDEST}/docker/docker-compose.yaml"
+set -u
 
-is_docker_running() {
-    local docker_name=""
-    if [ -f "$FILE_PATH" ]; then
-        docker_name=$(grep "container_name" "$FILE_PATH" | awk -F ':' '{print $2}' | xargs)
+SCRIPT_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
+PACKAGE_ROOT="$(cd "${SCRIPT_DIR}/.." 2>/dev/null && pwd)"
+APP_NAME="${TRIM_APPNAME:-icloud-sync}"
+APP_DEST="${TRIM_APPDEST:-${PACKAGE_ROOT}/app}"
+SERVER_DIR="${APP_DEST}/server"
+VAR_DIR="${TRIM_PKGVAR:-${PACKAGE_ROOT}/var}"
+CONFIG_DIR="${VAR_DIR}/config"
+LOG_DIR="${VAR_DIR}/logs"
+RUN_DIR="${VAR_DIR}/run"
+VENV_DIR="${VAR_DIR}/venv"
+PIP_CACHE_DIR="${VAR_DIR}/pip-cache"
+PID_FILE="${RUN_DIR}/icloud-sync.pid"
+LOG_FILE="${LOG_DIR}/service.log"
+REQUIREMENTS_FILE="${SERVER_DIR}/requirements.txt"
+WHEEL_DIR="${SERVER_DIR}/wheels"
+SENTINEL_FILE="${VENV_DIR}/.icloud-sync-native-0.3.0"
+SERVICE_PORT="${TRIM_SERVICE_PORT:-8080}"
+DEFAULT_SYNC_ROOT="/var/apps/${APP_NAME}/shares/icloud"
+
+log_message() {
+    mkdir -p "$LOG_DIR" 2>/dev/null || true
+    printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$1" >> "$LOG_FILE"
+}
+
+running_pid() {
+    pid=""
+    if [ -f "$PID_FILE" ]; then
+        pid="$(cat "$PID_FILE" 2>/dev/null || true)"
     fi
-
-    if [ -n "$docker_name" ]; then
-        docker inspect "$docker_name" 2>/dev/null | grep -q "\"Status\": \"running\","
-        return $?
+    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+        return 0
     fi
-
     return 1
 }
 
-case "$1" in
-start)
+find_python() {
+    if [ -n "${PYTHON_BIN:-}" ] && command -v "$PYTHON_BIN" >/dev/null 2>&1; then
+        command -v "$PYTHON_BIN"
+        return 0
+    fi
+
+    for candidate in python3.12 /usr/local/bin/python3.12 /usr/bin/python3.12 python3 python; do
+        if command -v "$candidate" >/dev/null 2>&1; then
+            command -v "$candidate"
+            return 0
+        fi
+    done
+    return 1
+}
+
+stop_legacy_docker_container() {
+    if ! command -v docker >/dev/null 2>&1; then
+        return 0
+    fi
+    if docker inspect fnos-icloud-sync >/dev/null 2>&1; then
+        log_message "stopping legacy Docker container fnos-icloud-sync"
+        docker stop fnos-icloud-sync >> "$LOG_FILE" 2>&1 || true
+    fi
+}
+
+selected_root_path() {
+    selected="$DEFAULT_SYNC_ROOT"
+    if [ -f "${SCRIPT_DIR}/config_shared.sh" ]; then
+        # shellcheck source=/dev/null
+        . "${SCRIPT_DIR}/config_shared.sh"
+        load_accessible_paths
+        selected="$(normalize_selected_root "$(current_selected_root)")"
+        write_storage_root_json "$selected"
+        write_runtime_env "$selected"
+    fi
+    printf '%s' "$selected"
+}
+
+install_requirements_online() {
+    "$VENV_DIR/bin/pip" install \
+        --prefer-binary \
+        --retries 8 \
+        --timeout 120 \
+        -r "$REQUIREMENTS_FILE"
+}
+
+ensure_venv() {
+    if [ -x "${VENV_DIR}/bin/python" ] && [ -f "$SENTINEL_FILE" ]; then
+        return 0
+    fi
+
+    python_bin="$(find_python)" || {
+        log_message "no Python interpreter found; expected python3.12 or python3"
+        return 1
+    }
+
+    mkdir -p "$VENV_DIR" "$PIP_CACHE_DIR" 2>/dev/null || return 1
+    log_message "using Python interpreter: $python_bin"
+    "$python_bin" -m venv "$VENV_DIR" >> "$LOG_FILE" 2>&1 || return 1
+
+    export PIP_CACHE_DIR
+    export PIP_DISABLE_PIP_VERSION_CHECK=1
+    export PIP_INDEX_URL="${PIP_INDEX_URL:-https://mirrors.aliyun.com/pypi/simple}"
+    export PIP_DEFAULT_TIMEOUT="${PIP_DEFAULT_TIMEOUT:-120}"
+
+    if find "$WHEEL_DIR" -maxdepth 1 -name '*.whl' 2>/dev/null | grep -q .; then
+        log_message "installing dependencies from bundled wheels"
+        if ! "$VENV_DIR/bin/pip" install --no-index --find-links "$WHEEL_DIR" -r "$REQUIREMENTS_FILE" >> "$LOG_FILE" 2>&1; then
+            log_message "bundled wheel install failed; falling back to PyPI mirror"
+            install_requirements_online >> "$LOG_FILE" 2>&1 || return 1
+        fi
+    else
+        log_message "bundled wheels missing; installing dependencies from PyPI mirror"
+        install_requirements_online >> "$LOG_FILE" 2>&1 || return 1
+    fi
+
+    touch "$SENTINEL_FILE"
+}
+
+start_service() {
+    mkdir -p "$CONFIG_DIR" "$LOG_DIR" "$RUN_DIR" 2>/dev/null || return 1
+    if running_pid; then
+        exit 0
+    fi
+    rm -f "$PID_FILE" 2>/dev/null || true
+    stop_legacy_docker_container
+
+    sync_root="$(selected_root_path)"
+    mkdir -p "$sync_root" "$LOG_DIR" "$CONFIG_DIR" 2>/dev/null || true
+    ensure_venv || return 1
+
+    log_message "starting service on port ${SERVICE_PORT}, sync root ${sync_root}"
+    (
+        trap '' HUP
+        cd "$SERVER_DIR" || exit 1
+        exec env \
+            APP_HOST="0.0.0.0" \
+            APP_PORT="$SERVICE_PORT" \
+            APP_CONFIG_DIR="$CONFIG_DIR" \
+            APP_DATA_DIR="$sync_root" \
+            APP_LOG_DIR="$LOG_DIR" \
+            SYNC_ROOT_HOST_PATH="$sync_root" \
+            PATH="${VENV_DIR}/bin:${PATH}" \
+            PYTHONUNBUFFERED="1" \
+            TZ="${TZ:-Asia/Shanghai}" \
+            "$VENV_DIR/bin/waitress-serve" --host="0.0.0.0" --port="$SERVICE_PORT" server:app
+    ) >> "$LOG_FILE" 2>&1 &
+    echo $! > "$PID_FILE"
+
+    sleep 1
+    if running_pid; then
+        exit 0
+    fi
+    log_message "service failed to start"
+    exit 1
+}
+
+stop_service() {
+    if running_pid; then
+        pid="$(cat "$PID_FILE" 2>/dev/null || true)"
+        log_message "stopping service pid ${pid}"
+        kill "$pid" 2>/dev/null || true
+        for _ in 1 2 3 4 5 6 7 8 9 10; do
+            if ! kill -0 "$pid" 2>/dev/null; then
+                rm -f "$PID_FILE" 2>/dev/null || true
+                exit 0
+            fi
+            sleep 1
+        done
+        kill -9 "$pid" 2>/dev/null || true
+    fi
+    rm -f "$PID_FILE" 2>/dev/null || true
     exit 0
+}
+
+case "${1:-}" in
+start)
+    start_service
     ;;
 stop)
-    exit 0
+    stop_service
     ;;
 status)
-    if is_docker_running; then
+    if running_pid; then
         exit 0
     fi
     exit 3

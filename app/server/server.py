@@ -733,7 +733,7 @@ def run_auth_job(job: Job, profile_id: str, password: str) -> None:
         finish_job(job, "failed", error="认证需要输入 Apple ID 密码或已保存的密码")
         return
     if not command_exists("icloudpd"):
-        finish_job(job, "failed", error="icloudpd 未安装，容器首次启动依赖安装可能尚未完成")
+        finish_job(job, "failed", error="icloudpd 未安装，首次启动依赖安装可能尚未完成")
         return
 
     root = profile_data_dir(profile)
@@ -755,7 +755,7 @@ def run_media_job(job: Job, profile_id: str) -> None:
         finish_job(job, "failed", error="请至少启用照片或视频同步")
         return
     if not command_exists("icloudpd"):
-        finish_job(job, "failed", error="icloudpd 未安装，容器首次启动依赖安装可能尚未完成")
+        finish_job(job, "failed", error="icloudpd 未安装，首次启动依赖安装可能尚未完成")
         return
 
     root = profile_data_dir(profile)
@@ -1094,7 +1094,7 @@ def storage_mount_needs_recreate() -> bool:
 
 def storage_mount_error_response():
     return jsonify({
-        "error": "同步根目录还没有生效。请在飞牛应用中心停止后重新启动本应用，等容器重新创建挂载后再开始同步。"
+        "error": "同步根目录还没有生效。请在飞牛应用中心停止后重新启动本应用，等服务读取新路径后再开始同步。"
     }), 409
 
 

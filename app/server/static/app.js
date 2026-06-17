@@ -412,7 +412,7 @@ function isStorageRestartRequired() {
 }
 
 function showStorageRestartToast() {
-  showToast("同步根目录还没有生效，请在应用中心或 Docker Compose 停止后重新启动本应用");
+  showToast("同步根目录还没有生效，请在应用中心停止后重新启动本应用");
 }
 
 function isLogNearBottom() {

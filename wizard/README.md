@@ -12,4 +12,4 @@
 
 - 同步根目录选项来自 `cmd/config_shared.sh` 检测到的授权目录。
 - 默认同步根目录应保持为 `/var/apps/icloud-sync/shares/icloud`。
-- 修改向导字段名时，需要同步更新 `cmd/config_callback` 和 Docker Compose 变量引用。
+- 修改向导字段名时，需要同步更新 `cmd/config_callback`、`cmd/config_shared.sh` 和 `cmd/main` 的路径读取逻辑。

@@ -3,7 +3,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$ProjectDir = Resolve-Path (Join-Path $PSScriptRoot "..")
+$ProjectDir = (Resolve-Path (Join-Path $PSScriptRoot "..")).ProviderPath
 $DistDir = Join-Path $ProjectDir "dist"
 $ManifestPath = Join-Path $ProjectDir "manifest"
 
@@ -31,7 +31,7 @@ if (-not $FnpackBin) {
 }
 
 if (-not $FnpackBin -or -not (Test-Path $FnpackBin)) {
-  throw "找不到 fnpack。请把 fnpack 放到项目根目录，或设置 FNPACK_BIN=/abs/path/to/fnpack。"
+  throw "fnpack not found. Put fnpack in the project root, or set FNPACK_BIN=/abs/path/to/fnpack."
 }
 
 New-Item -ItemType Directory -Force -Path $DistDir | Out-Null
@@ -57,7 +57,7 @@ if (-not (Test-Path $built)) {
 }
 
 if (-not $built -or -not (Test-Path $built)) {
-  throw "fnpack 没有生成 .fpk 文件。"
+  throw "fnpack did not generate an .fpk file."
 }
 
 $target = Join-Path $DistDir "$appname-$version.fpk"
