@@ -13,6 +13,10 @@ const fields = {
   mediaMode: document.querySelector("#mediaMode"),
   folderStructure: document.querySelector("#folderStructure"),
   size: document.querySelector("#size"),
+  livePhotoSize: document.querySelector("#livePhotoSize"),
+  forceSize: document.querySelector("#forceSize"),
+  alignRaw: document.querySelector("#alignRaw"),
+  fileMatchPolicy: document.querySelector("#fileMatchPolicy"),
   recent: document.querySelector("#recent"),
   untilFound: document.querySelector("#untilFound"),
   retryAttempts: document.querySelector("#retryAttempts"),
@@ -69,6 +73,20 @@ const els = {
   lastSync: document.querySelector("#lastSync"),
   logPanel: document.querySelector(".log-panel"),
   toast: document.querySelector("#toast"),
+  modalRoot: document.querySelector("#modalRoot"),
+  modalBackdrop: document.querySelector("#modalBackdrop"),
+  modalCard: document.querySelector("#modalCard"),
+  modalEyebrow: document.querySelector("#modalEyebrow"),
+  modalTitle: document.querySelector("#modalTitle"),
+  modalBody: document.querySelector("#modalBody"),
+  modalDetail: document.querySelector("#modalDetail"),
+  modalFieldWrap: document.querySelector("#modalFieldWrap"),
+  modalInputLabel: document.querySelector("#modalInputLabel"),
+  modalInput: document.querySelector("#modalInput"),
+  modalInputHint: document.querySelector("#modalInputHint"),
+  modalError: document.querySelector("#modalError"),
+  modalCancelBtn: document.querySelector("#modalCancelBtn"),
+  modalConfirmBtn: document.querySelector("#modalConfirmBtn"),
 };
 
 const CLOUD_DELETE_CONFIRM_TEXT = "删除云端";
@@ -82,9 +100,18 @@ let appState = {
   runningJobsCount: 0,
   storageRestartRequired: false,
   logAutoFollow: true,
+  logSelectionLocked: false,
+  pendingLogText: "",
+  lastRenderedLogText: "等待任务...",
   lastJobId: "",
 };
 let toastTimer = null;
+let modalState = {
+  isOpen: false,
+  resolver: null,
+  requiredText: "",
+  lastFocused: null,
+};
 
 function showToast(message) {
   els.toast.textContent = message;
@@ -182,12 +209,149 @@ function updateMediaModeWarning() {
   els.cloudDeleteWarning?.classList.toggle("hidden", !isCloudDeleteMode());
 }
 
-function confirmCloudDelete(actionLabel) {
-  const value = window.prompt(
-    `${actionLabel}会在同步成功后删除 iCloud 云端对应照片/视频。\n\n` +
-      `请先确认 NAS 已有完整备份。若继续，请输入：${CLOUD_DELETE_CONFIRM_TEXT}`
-  );
-  return value === CLOUD_DELETE_CONFIRM_TEXT;
+function updateModalValidation(showError = false) {
+  if (!modalState.requiredText) {
+    els.modalConfirmBtn.disabled = false;
+    els.modalError.classList.add("hidden");
+    return true;
+  }
+
+  const matched = els.modalInput.value.trim() === modalState.requiredText;
+  els.modalConfirmBtn.disabled = !matched;
+  if (matched || !showError) {
+    els.modalError.classList.add("hidden");
+  } else {
+    els.modalError.textContent = `请输入“${modalState.requiredText}”后再继续。`;
+    els.modalError.classList.remove("hidden");
+  }
+  return matched;
+}
+
+function closeModal(result = false) {
+  if (!modalState.isOpen) {
+    return;
+  }
+
+  const resolver = modalState.resolver;
+  const lastFocused = modalState.lastFocused;
+  modalState.isOpen = false;
+  modalState.resolver = null;
+  modalState.requiredText = "";
+  modalState.lastFocused = null;
+
+  els.modalRoot.classList.add("hidden");
+  els.modalRoot.classList.remove("danger");
+  els.modalRoot.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("modal-open");
+  els.modalInput.value = "";
+  els.modalError.classList.add("hidden");
+
+  if (lastFocused && typeof lastFocused.focus === "function") {
+    window.setTimeout(() => lastFocused.focus({ preventScroll: true }), 0);
+  }
+  if (resolver) {
+    resolver(Boolean(result));
+  }
+}
+
+function openModal(options = {}) {
+  if (modalState.isOpen) {
+    closeModal(false);
+  }
+
+  modalState.isOpen = true;
+  modalState.requiredText = String(options.confirmText || "").trim();
+  modalState.lastFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+  els.modalRoot.classList.toggle("danger", options.tone === "danger");
+  els.modalRoot.classList.remove("hidden");
+  els.modalRoot.setAttribute("aria-hidden", "false");
+  document.body.classList.add("modal-open");
+
+  els.modalEyebrow.textContent = options.eyebrow || "";
+  els.modalEyebrow.classList.toggle("hidden", !options.eyebrow);
+  els.modalTitle.textContent = options.title || "确认操作";
+  els.modalBody.textContent = options.body || "";
+  els.modalDetail.textContent = options.detail || "";
+  els.modalDetail.classList.toggle("hidden", !options.detail);
+
+  els.modalCancelBtn.textContent = options.cancelLabel || "取消";
+  els.modalConfirmBtn.textContent = options.confirmLabel || "确认";
+  els.modalConfirmBtn.className = options.tone === "danger" ? "primary danger-solid" : "primary";
+
+  const needsInput = Boolean(modalState.requiredText);
+  els.modalFieldWrap.classList.toggle("hidden", !needsInput);
+  els.modalInputLabel.textContent = options.inputLabel || "确认文字";
+  els.modalInputHint.textContent = options.inputHint || "";
+  els.modalInputHint.classList.toggle("hidden", !options.inputHint);
+  els.modalInput.placeholder = options.inputPlaceholder || (needsInput ? `请输入“${modalState.requiredText}”` : "");
+  els.modalInput.value = "";
+  els.modalError.classList.add("hidden");
+
+  updateModalValidation(false);
+
+  const focusTarget = needsInput ? els.modalInput : els.modalConfirmBtn;
+  window.setTimeout(() => focusTarget.focus({ preventScroll: true }), 20);
+
+  return new Promise((resolve) => {
+    modalState.resolver = resolve;
+  });
+}
+
+async function confirmCloudDelete(actionLabel) {
+  return openModal({
+    eyebrow: "高风险操作",
+    title: `${actionLabel}前请再次确认`,
+    body: "本次操作会在同步成功后删除 iCloud 云端对应照片/视频。",
+    detail: `请先确认 NAS 已有完整备份。若继续，请输入：${CLOUD_DELETE_CONFIRM_TEXT}`,
+    confirmLabel: "继续执行",
+    cancelLabel: "暂不继续",
+    confirmText: CLOUD_DELETE_CONFIRM_TEXT,
+    inputLabel: "确认文字",
+    inputHint: "只有输入指定文字后，才会继续执行危险操作。",
+    tone: "danger",
+  });
+}
+
+async function confirmProfileDeletion(profile) {
+  return openModal({
+    eyebrow: "删除方案",
+    title: `删除“${profile.name}”`,
+    body: "删除后将移除此方案配置、任务状态和 Cookie。",
+    detail: "当前同步文件默认保留，后续可在 NAS 里手动清理。",
+    confirmLabel: "删除方案",
+    cancelLabel: "保留方案",
+    tone: "danger",
+  });
+}
+
+function handleModalKeydown(event) {
+  if (!modalState.isOpen) {
+    return;
+  }
+
+  if (event.key === "Escape") {
+    event.preventDefault();
+    closeModal(false);
+    return;
+  }
+
+  if (event.key !== "Enter") {
+    return;
+  }
+
+  if (event.target === els.modalCancelBtn) {
+    return;
+  }
+
+  if (!updateModalValidation(true)) {
+    event.preventDefault();
+    els.modalInput.focus({ preventScroll: true });
+    return;
+  }
+
+  event.preventDefault();
+  closeModal(true);
 }
 
 function guideTargets(step) {
@@ -360,6 +524,10 @@ function applyProfile(profile) {
   fields.mediaMode.value = profile.media_mode || "copy";
   fields.folderStructure.value = profile.folder_structure || "{:%Y/%m/%d}";
   fields.size.value = profile.size || "original";
+  fields.livePhotoSize.value = profile.live_photo_size || "";
+  fields.forceSize.checked = Boolean(profile.force_size);
+  fields.alignRaw.value = profile.align_raw || "";
+  fields.fileMatchPolicy.value = profile.file_match_policy || "";
   fields.recent.value = profile.recent || "";
   fields.untilFound.value = profile.until_found || "";
   fields.retryAttempts.value = profile.retry_attempts ?? 3;
@@ -400,6 +568,10 @@ function collectConfig(includePasswords = false) {
     media_mode: fields.mediaMode.value,
     folder_structure: fields.folderStructure.value.trim(),
     size: fields.size.value,
+    live_photo_size: fields.livePhotoSize.value,
+    force_size: fields.forceSize.checked,
+    align_raw: fields.alignRaw.value,
+    file_match_policy: fields.fileMatchPolicy.value,
     recent: fields.recent.value.trim(),
     until_found: fields.untilFound.value.trim(),
     retry_attempts: fields.retryAttempts.value.trim(),
@@ -441,9 +613,41 @@ function showStorageRestartToast() {
   showToast("同步根目录还没有生效，请在应用中心停止后重新启动本应用");
 }
 
+function isSelectionInsideLog() {
+  const selection = window.getSelection?.();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    return false;
+  }
+  return els.logOutput.contains(selection.anchorNode) || els.logOutput.contains(selection.focusNode);
+}
+
 function isLogNearBottom() {
   const distance = els.logOutput.scrollHeight - els.logOutput.scrollTop - els.logOutput.clientHeight;
   return distance < 24;
+}
+
+function shouldFreezeLogUpdates() {
+  return appState.logSelectionLocked;
+}
+
+function applyLogText(text, shouldFollow = false) {
+  if (text === appState.lastRenderedLogText) {
+    return;
+  }
+  els.logOutput.textContent = text;
+  appState.lastRenderedLogText = text;
+  if (shouldFollow) {
+    els.logOutput.scrollTop = els.logOutput.scrollHeight;
+  }
+}
+
+function flushPendingLogText() {
+  if (shouldFreezeLogUpdates() || !appState.pendingLogText) {
+    return;
+  }
+  const text = appState.pendingLogText;
+  appState.pendingLogText = "";
+  applyLogText(text, false);
 }
 
 function setRunning(isRunning) {
@@ -480,7 +684,7 @@ function renderJob(job) {
   };
   const profileName = job?.profile_name ? ` · ${job.profile_name}` : "";
   const otherRunningCount = Math.max(0, (appState.runningJobsCount || 0) - (status === "running" ? 1 : 0));
-  const waitingInputText = job?.waiting_input ? " · 等待输入" : "";
+  const waitingInputText = job?.waiting_input ? " · 等待控制台输入" : "";
   const otherJobsText = otherRunningCount > 0 ? ` · 另有 ${otherRunningCount} 个方案运行中` : "";
   els.jobStatus.textContent = `${labels[status] || status}${profileName}${waitingInputText}${otherJobsText}`;
   els.jobStatus.className = "pill";
@@ -491,16 +695,20 @@ function renderJob(job) {
   }
   setRunning(status === "running");
 
+  let nextLogText = "等待任务...";
+  let shouldFollow = false;
   if (Array.isArray(job?.log) && job.log.length) {
-    const shouldFollow = appState.logAutoFollow || isLogNearBottom();
-    els.logOutput.textContent = job.log.join("\n");
-    if (shouldFollow) {
-      els.logOutput.scrollTop = els.logOutput.scrollHeight;
-    }
+    nextLogText = job.log.join("\n");
+    shouldFollow = appState.logAutoFollow || isLogNearBottom();
   } else if (otherRunningCount > 0) {
-    els.logOutput.textContent = "当前方案暂无任务日志；可切换左侧运行中的方案查看对应进度。";
+    nextLogText = "当前方案暂无任务日志；可切换左侧运行中的方案查看对应进度。";
+  }
+
+  if (shouldFreezeLogUpdates()) {
+    appState.pendingLogText = nextLogText;
   } else {
-    els.logOutput.textContent = "等待任务...";
+    appState.pendingLogText = "";
+    applyLogText(nextLogText, shouldFollow);
   }
 }
 
@@ -591,7 +799,7 @@ async function saveCurrentProfile(includePasswords = true, options = {}) {
     isCloudDeleteMode(payload.media_mode) &&
     previousMode !== "move" &&
     !options.skipCloudDeleteConfirm &&
-    !confirmCloudDelete("保存云端删除模式")
+    !(await confirmCloudDelete("保存云端删除模式"))
   ) {
     showToast("已取消保存");
     return null;
@@ -664,7 +872,7 @@ els.deleteProfileBtn.addEventListener("click", async () => {
   if (!profile) {
     return;
   }
-  const confirmed = window.confirm(`删除方案“${profile.name}”？同步文件默认保留。`);
+  const confirmed = await confirmProfileDeletion(profile);
   if (!confirmed) {
     return;
   }
@@ -740,6 +948,26 @@ els.logOutput.addEventListener("scroll", () => {
   appState.logAutoFollow = isLogNearBottom();
 });
 
+document.addEventListener("selectionchange", () => {
+  const wasLocked = appState.logSelectionLocked;
+  appState.logSelectionLocked = isSelectionInsideLog();
+  if (wasLocked && !appState.logSelectionLocked) {
+    flushPendingLogText();
+  }
+});
+
+els.modalBackdrop.addEventListener("click", () => closeModal(false));
+els.modalCancelBtn.addEventListener("click", () => closeModal(false));
+els.modalConfirmBtn.addEventListener("click", () => {
+  if (!updateModalValidation(true)) {
+    els.modalInput.focus({ preventScroll: true });
+    return;
+  }
+  closeModal(true);
+});
+els.modalInput.addEventListener("input", () => updateModalValidation(false));
+document.addEventListener("keydown", handleModalKeydown);
+
 Object.entries(guideButtons).forEach(([step, button]) => {
   button.addEventListener("click", () => selectGuideStep(step, { step, scroll: true, focus: true }));
 });
@@ -776,7 +1004,7 @@ els.mediaSyncBtn.addEventListener("click", async () => {
     }
     releaseGuideStep();
     const nextConfig = collectConfig(true);
-    if (isCloudDeleteMode(nextConfig.media_mode) && !confirmCloudDelete("开始媒体同步")) {
+    if (isCloudDeleteMode(nextConfig.media_mode) && !(await confirmCloudDelete("开始媒体同步"))) {
       showToast("已取消同步");
       return;
     }

@@ -84,6 +84,10 @@ DEFAULT_PROFILE: dict[str, Any] = {
     "album": "",
     "library": "",
     "size": "original",
+    "live_photo_size": "",
+    "force_size": False,
+    "align_raw": "",
+    "file_match_policy": "",
     "retry_attempts": 3,
     "retry_delay_seconds": 60,
     "include_live_photos": True,
@@ -281,6 +285,14 @@ def normalize_profile(profile: dict[str, Any]) -> None:
     media_mode = str(profile.get("media_mode") or "copy")
     profile["media_mode"] = media_mode if media_mode in {"copy", "mirror", "move"} else "copy"
     profile["size"] = str(profile.get("size") or "original")
+    live_photo_size = str(profile.get("live_photo_size") or "").strip().lower()
+    profile["live_photo_size"] = live_photo_size if live_photo_size in {"", "original", "medium", "thumb"} else ""
+    align_raw = str(profile.get("align_raw") or "").strip().lower()
+    profile["align_raw"] = align_raw if align_raw in {"", "original", "alternative", "as-is"} else ""
+    file_match_policy = str(profile.get("file_match_policy") or "").strip().lower()
+    profile["file_match_policy"] = (
+        file_match_policy if file_match_policy in {"", "name-size-dedup-with-suffix", "name-id7"} else ""
+    )
     profile["folder_structure"] = str(profile.get("folder_structure") or "{:%Y/%m/%d}")
     profile["sync_interval_minutes"] = max(15, int_or_default(profile.get("sync_interval_minutes"), 360))
     profile["recent"] = normalize_number_string(profile.get("recent"))
@@ -293,6 +305,7 @@ def normalize_profile(profile: dict[str, Any]) -> None:
         "notes_enabled",
         "schedule_enabled",
         "store_password",
+        "force_size",
         "include_live_photos",
         "keep_unicode",
         "set_exif_datetime",
@@ -404,6 +417,10 @@ def save_config(payload: dict[str, Any]) -> dict[str, Any]:
             "album",
             "library",
             "size",
+            "live_photo_size",
+            "align_raw",
+            "file_match_policy",
+            "force_size",
             "include_live_photos",
             "keep_unicode",
             "set_exif_datetime",
@@ -693,10 +710,18 @@ def build_base_icloudpd_args(
         args.extend(["--folder-structure", profile["folder_structure"]])
     if profile.get("size"):
         args.extend(["--size", profile["size"]])
+    if profile.get("live_photo_size"):
+        args.extend(["--live-photo-size", profile["live_photo_size"]])
+    if profile.get("force_size"):
+        args.append("--force-size")
     if profile.get("album"):
         args.extend(["--album", str(profile["album"]).strip()])
     if profile.get("library"):
         args.extend(["--library", str(profile["library"]).strip()])
+    if profile.get("align_raw"):
+        args.extend(["--align-raw", profile["align_raw"]])
+    if profile.get("file_match_policy"):
+        args.extend(["--file-match-policy", profile["file_match_policy"]])
     if profile.get("recent"):
         args.extend(["--recent", profile["recent"]])
     if profile.get("until_found"):
@@ -737,9 +762,12 @@ def run_process(job: Job, args: list[str]) -> int:
         job.process = process
     assert process.stdout is not None
     for line in process.stdout:
-        if looks_like_input_prompt(line):
-            with job.lock:
+        prompt_detected = looks_like_input_prompt(line)
+        with job.lock:
+            if prompt_detected:
                 job.waiting_input = True
+            elif job.waiting_input and line.strip():
+                job.waiting_input = False
         job.append(line)
     code = process.wait()
     with job.lock:
@@ -764,18 +792,19 @@ def mask_command(args: list[str]) -> list[str]:
 
 
 def looks_like_input_prompt(line: str) -> bool:
-    lowered = line.lower()
-    markers = [
-        "verification code",
-        "two-factor",
-        "two factor",
-        "mfa",
-        "2fa",
-        "password",
-        "enter code",
-        "security code",
+    lowered = line.strip().lower()
+    if not lowered:
+        return False
+
+    prompt_patterns = [
+        r"(enter|input|provide|send).*(verification code|security code|2fa|two-factor|two factor|mfa)",
+        r"(verification code|security code|2fa|two-factor|two factor|mfa).*(enter|input|required|needed|waiting)",
+        r"press enter to continue",
+        r"confirmation required",
+        r"waiting for .*code",
+        r"please confirm",
     ]
-    return any(marker in lowered for marker in markers)
+    return any(re.search(pattern, lowered) for pattern in prompt_patterns)
 
 
 def run_auth_job(job: Job, profile_id: str, password: str) -> None:

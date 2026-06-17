@@ -1,118 +1,68 @@
 # iCloud 同步 FPK
 
-这是一个给飞牛 fnOS 使用的原生 FPK 应用。安装后会出现「iCloud 同步」桌面入口，打开后可以配置 Apple ID、选择照片/视频/备忘录，并查看同步任务日志。
+这是一个给飞牛 `fnOS` 使用的 iCloud 同步应用。安装后桌面会出现「iCloud 同步」入口，打开后就能把 iCloud 照片、视频和备忘录保存到 NAS。
 
-## 功能
+## 它能做什么
 
-- 照片同步：调用 `icloudpd` 下载 iCloud Photos 照片到应用共享目录。
-- 视频同步：可单独下载视频到 `videos` 目录。
-- 备忘录导出：实验性 IMAP 导出，保存为 Markdown 或 HTML。
-- 2FA 输入：认证时可在面板里发送 Apple 双重认证验证码。
-- 计划同步：按分钟间隔自动同步媒体文件。
-- 稳定性控制：支持失败自动重试，用于缓解 Apple 503、连接重置、临时网络抖动等导致的中途退出。
-- 多方案并行：不同同步方案可以同时运行任务；同一方案仍然一次只允许一个任务，避免目录和 Cookie 冲突。
-- 本地持久化：配置、Cookie、日志和 Python 虚拟环境存在应用数据目录；下载结果直接写入应用设置中选择的同步根目录。
-- 多账号目录隔离：每个同步方案都可以设置自己的保存文件夹。
-- 目录可选：可在飞牛“应用设置”里把同步根目录切换到本应用已授权的任意目录。
-- 云端清理：可选高风险 Move 模式，媒体同步到 NAS 后删除 iCloud 云端对应照片/视频。
-- 统一界面：桌面入口通过飞牛标准端口代理进入同步面板，主同步面板采用 iOS 26 风格玻璃面板。
+- 把 iCloud 照片和视频下载到 NAS
+- 支持多个同步方案，不同账号可分开保存
+- 支持验证码输入、计划同步、失败自动重试
+- 支持导出 iCloud 备忘录
+- 支持危险模式：下载完成后删除 iCloud 云端对应媒体
 
-## 目录
+## 适合谁
 
-```text
-fnos-icloud-sync/
-├── manifest
-├── config/
-├── wizard/
-├── cmd/
-├── app/
-│   ├── server/
-│   └── ui/
-└── scripts/
-```
+- 想把 iPhone / iPad 上的照片长期备份到飞牛 NAS
+- 想把家人账号、工作账号分开同步
+- 想定时自动拉取新照片，不想每次手动下载
 
-## 模块说明
+## 安装
 
-每个源码模块目录都带有独立 `README.md`，用于说明职责、关键文件和维护注意事项。
+1. 打开仓库里的 `dist/` 目录，选择最新的 `icloud-sync-*.fpk`。
+2. 在飞牛应用中心手动安装这个 `fpk`。
+3. 安装完成后，从桌面打开「iCloud 同步」。
 
-- `app/`：FPK 运行时应用目录，包含后端面板和桌面入口。
-- `app/server/`：Flask 后端和 Web 面板静态资源，负责配置、认证、同步任务和状态接口。
-- `app/server/static/`：浏览器端页面、样式和交互脚本。
-- `app/server/wheels/`：离线 Python wheel 依赖，减少 NAS 首次启动下载等待。
-- `app/ui/`：fnOS 桌面入口配置和备用启动页脚本。
-- `app/ui/images/`：桌面入口图标资源。
-- `cmd/`：FPK 安装、配置、卸载等生命周期脚本。
-- `config/`：FPK 资源、权限和应用共享目录声明。
-- `wizard/`：fnOS 安装/配置向导定义。
-- `scripts/`：本地构建辅助脚本。
-- `tools/`：本地构建工具放置目录。
-- `docs/`：上架、限制说明和维护文档。
+## 使用
 
-下载结果安装后位于同步根目录下。默认同步根目录是应用共享目录：
+1. 新建一个同步方案。
+2. 填写 Apple ID。
+3. 选择当前方案保存文件夹。
+4. 按需勾选照片、视频、备忘录。
+5. 点击「认证 iCloud」完成登录。
+6. 如果页面提示验证码或确认文字，直接在页面下方输入并发送。
+7. 保存后开始同步。
 
-```text
-/var/apps/icloud-sync/shares/icloud/<方案文件夹>/photos
-/var/apps/icloud-sync/shares/icloud/<方案文件夹>/videos
-/var/apps/icloud-sync/shares/icloud/<方案文件夹>/notes
-```
+## 常用说明
 
-如果你在飞牛应用设置中把同步根目录改为 `/vol1/1000/windows用盘符Z`，并把当前方案保存文件夹设为 `wyl_icloud`，重启应用后实际落盘目录就是：
-
-```text
-/vol1/1000/windows用盘符Z/wyl_icloud/photos
-/vol1/1000/windows用盘符Z/wyl_icloud/videos
-/vol1/1000/windows用盘符Z/wyl_icloud/notes
-```
-
-Web 面板会显示最终保存路径。如果修改了同步根目录但当前服务仍在使用旧位置，请在应用中心停止后重新启动应用。
+- 默认模式只下载到 NAS，不会删除 iCloud 云端文件。
+- 如果你修改了同步根目录，需要在应用中心停止并重新启动应用后才会生效。
+- 不同方案可以同时运行；同一个方案一次只会运行一个任务。
+- 如果开启“下载后删除 iCloud 云端”，请先确认 NAS 上的文件已经完整保存，并且你自己有额外备份。
+- Live Photo、RAW 和同名文件处理都可以在页面里单独设置。
 
 ## 打包
 
-先下载飞牛官方 `fnpack`，或者把 `FNPACK_BIN` 指到本机的 `fnpack` 可执行文件。
+如果你只是安装使用，这一节可以跳过。
 
 Windows:
 
 ```powershell
-cd C:\Project\NAS相关\fnos-icloud-sync
+cd F:\project\fnos_sync_icloud
 .\scripts\build-fpk.ps1
 ```
 
-Linux/macOS:
+Linux / macOS:
 
 ```bash
-cd /path/to/fnos-icloud-sync
+cd /path/to/fnos_sync_icloud
 chmod +x scripts/build-fpk.sh
 ./scripts/build-fpk.sh
 ```
 
-也可以直接运行：
+打包完成后，新的安装包会出现在 `dist/` 目录。
 
-```bash
-fnpack build --directory .
-```
+## 目录说明
 
-成功后会在 `dist/` 里得到当前版本的 `icloud-sync-*.fpk`。
-
-## 使用
-
-1. 在飞牛应用中心手动安装 `.fpk`。
-2. 启动应用，桌面入口会通过飞牛标准端口代理进入同步面板；首次启动如果 Python 虚拟环境、Web 服务或依赖仍在准备，进入速度可能会稍慢一些。
-3. 如果想把文件存到任意位置，先进入飞牛“应用设置”，为本应用授权目录，并在配置向导里选择同步根目录；保存后停止并重新启动应用，让服务读取新的目录。
-4. 打开桌面入口「iCloud 同步」。
-5. 填写方案名称、Apple ID 和当前方案保存文件夹。
-6. 填写密码，点击「认证 iCloud」。
-7. 如果日志提示验证码，在输入框填入 6 位验证码并发送。
-8. 选择照片/视频/备忘录，保存配置后运行同步。
-
-## 注意
-
-- iCloud 照片/视频使用 `icloudpd==1.32.3`，这是 2026 年 5 月底修复新版 Apple 2FA 流程的版本。
-- 默认是 Copy 模式，只下载新增内容，不删除云端文件。
-- 如果 iCloud 返回 503、连接中断或疑似触发限流，可以把“失败重试次数”设为 3、“重试等待秒”设为 60 或更高。
-- `icloudpd==1.32.3` 当前没有 `--download-delay` 和 `--max-concurrent-downloads` 官方参数，多线程下载和单文件延时节流已记录在 `docs/future.md`，不会写进当前运行命令。
-- 「同步本地删除」只会删除 NAS 本地已从 iCloud 移除的文件，不会删除 iCloud 云端照片。
-- 「下载后删除 iCloud 云端」会在媒体同步成功后请求删除云端对应照片/视频；这是不可轻易回退的危险操作，启用前请确认 NAS 文件完整并已有其他备份。
-- 备忘录没有 Apple 官方稳定第三方同步 API。这里走 IMAP 导出，只在 iCloud Mail 能看到 Notes/备忘录文件夹时有效。
-- 如果需要计划同步但不保存 Apple ID 密码，Cookie 过期后需要重新手动认证。
-- 若 NAS 无法访问 PyPI，首次启动会优先使用内置 wheel；如果系统 Python 版本与内置 wheel 不兼容，在线依赖安装可能仍会失败。
-- 多方案并行会同时占用更多网络、磁盘和 Apple 接口配额；如果同一个 Apple ID 下开太多并发任务，更容易遇到限流、验证码或临时 503。
+- `dist/`：已经打好的安装包
+- `app/`：应用页面和后端服务
+- `scripts/`：本地打包脚本

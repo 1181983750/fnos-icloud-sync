@@ -197,6 +197,47 @@
 
                 <div class="row">
                   <div class="field">
+                    <label for="livePhotoSize">Live Photo 尺寸</label>
+                    <select id="livePhotoSize">
+                      <option value="">默认</option>
+                      <option value="original">原始</option>
+                      <option value="medium">中等</option>
+                      <option value="thumb">缩略图</option>
+                    </select>
+                    <small class="field-help">用于单独控制 Live Photo 资源的下载尺寸。</small>
+                  </div>
+                  <div class="field">
+                    <label for="fileMatchPolicy">同名文件处理</label>
+                    <select id="fileMatchPolicy">
+                      <option value="">默认自动去重</option>
+                      <option value="name-id7">按固定标识区分同名文件</option>
+                    </select>
+                    <small class="field-help">避免不同照片因为同名而互相覆盖。</small>
+                  </div>
+                </div>
+
+                <div class="row">
+                  <div class="field">
+                    <label class="checkline">
+                      <input id="forceSize" type="checkbox" />
+                      <span>只下载所选尺寸</span>
+                    </label>
+                    <small class="field-help">开启后，如果没有该尺寸，就不再自动回退到其他尺寸。</small>
+                  </div>
+                  <div class="field">
+                    <label for="alignRaw">RAW + JPG 处理</label>
+                    <select id="alignRaw">
+                      <option value="">默认</option>
+                      <option value="original">RAW 当作原始版</option>
+                      <option value="alternative">RAW 当作备用版</option>
+                      <option value="as-is">按 iCloud 原样</option>
+                    </select>
+                    <small class="field-help">用于控制 RAW 和 JPG 同时存在时的保存方式。</small>
+                  </div>
+                </div>
+
+                <div class="row">
+                  <div class="field">
                     <label for="recent">最近天数</label>
                     <input id="recent" inputmode="numeric" placeholder="留空表示全部" />
                   </div>
@@ -365,6 +406,34 @@
       </div>
     </main>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <div id="modalRoot" class="modal-root hidden" aria-hidden="true">
+      <div id="modalBackdrop" class="modal-backdrop"></div>
+      <section
+        id="modalCard"
+        class="modal-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modalTitle"
+        aria-describedby="modalBody"
+      >
+        <div class="modal-head">
+          <p id="modalEyebrow" class="modal-eyebrow hidden"></p>
+          <h2 id="modalTitle">确认操作</h2>
+        </div>
+        <p id="modalBody" class="modal-body"></p>
+        <p id="modalDetail" class="modal-detail hidden"></p>
+        <div id="modalFieldWrap" class="modal-field hidden">
+          <label id="modalInputLabel" for="modalInput">确认文字</label>
+          <input id="modalInput" autocomplete="off" />
+          <small id="modalInputHint" class="field-help hidden"></small>
+          <p id="modalError" class="modal-error hidden"></p>
+        </div>
+        <div class="modal-actions">
+          <button id="modalCancelBtn" class="ghost" type="button">取消</button>
+          <button id="modalConfirmBtn" class="primary" type="button">确认</button>
+        </div>
+      </section>
+    </div>
     <script src="/static/app.js"></script>
   </body>
 </html>
