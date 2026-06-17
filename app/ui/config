@@ -5,7 +5,8 @@
       "icon": "images/icon_{0}.png",
       "type": "iframe",
       "protocol": "http",
-      "url": "/cgi/ThirdParty/icloud-sync/index.cgi",
+      "port": "8080",
+      "url": "/",
       "showDesktop": true,
       "allUsers": true,
       "noDisplay": false

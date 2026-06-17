@@ -79,6 +79,7 @@ let appState = {
   status: null,
   selectedGuideStep: "",
   isRunning: false,
+  runningJobsCount: 0,
   storageRestartRequired: false,
   logAutoFollow: true,
   lastJobId: "",
@@ -107,6 +108,15 @@ async function api(path, options = {}) {
 function activeProfile() {
   const profiles = appState.config?.profiles || [];
   return profiles.find((item) => item.id === appState.activeProfileId) || profiles[0] || null;
+}
+
+function activeProfileSummary() {
+  const profiles = appState.status?.profiles || [];
+  return profiles.find((item) => item.id === appState.activeProfileId) || activeProfile();
+}
+
+function activeProfileJob() {
+  return appState.status?.job || activeProfileSummary()?.job || null;
 }
 
 function cleanRelativePath(value) {
@@ -289,27 +299,43 @@ function guideHintText(step) {
 }
 
 function renderProfiles() {
+  const profileStatus = new Map((appState.status?.profiles || []).map((item) => [item.id, item]));
   const profiles = appState.config?.profiles || [];
   els.profileList.innerHTML = "";
   profiles.forEach((profile) => {
+    const summary = profileStatus.get(profile.id) || profile;
+    const job = summary.job || null;
     const button = document.createElement("button");
     button.type = "button";
-    button.className = `profile-item${profile.id === appState.activeProfileId ? " active" : ""}`;
+    button.className = `profile-item${profile.id === appState.activeProfileId ? " active" : ""}${job?.status === "running" ? " running" : ""}`;
     button.dataset.profileId = profile.id;
 
     const title = document.createElement("strong");
-    title.textContent = profile.name || "未命名方案";
+    title.textContent = summary.name || "未命名方案";
     const account = document.createElement("span");
-    account.textContent = profile.apple_id || "未填写 Apple ID";
+    account.textContent = summary.apple_id || "未填写 Apple ID";
     const flags = document.createElement("small");
     const enabled = [];
-    if (profile.photos_enabled) enabled.push("照片");
-    if (profile.videos_enabled) enabled.push("视频");
-    if (profile.notes_enabled) enabled.push("备忘录");
-    const folder = cleanRelativePath(profile.data_subdir) || "根目录";
+    if (summary.photos_enabled) enabled.push("照片");
+    if (summary.videos_enabled) enabled.push("视频");
+    if (summary.notes_enabled) enabled.push("备忘录");
+    const folder = cleanRelativePath(summary.data_subdir) || "根目录";
     flags.textContent = `${enabled.length ? enabled.join(" / ") : "未选择同步内容"} · ${folder}`;
 
     button.append(title, account, flags);
+    if (job?.status === "running" || job?.waiting_input) {
+      const kindLabels = {
+        auth: "认证",
+        "media-sync": "媒体同步",
+        "scheduled-media-sync": "计划同步",
+        "notes-export": "备忘录导出",
+      };
+      const jobLine = document.createElement("small");
+      jobLine.textContent = job.waiting_input
+        ? `等待输入 · ${kindLabels[job.kind] || job.kind}`
+        : `运行中 · ${kindLabels[job.kind] || job.kind}`;
+      button.append(jobLine);
+    }
     button.addEventListener("click", () => selectProfile(profile.id));
     els.profileList.append(button);
   });
@@ -353,7 +379,7 @@ function applyProfile(profile) {
   fields.noteFormat.value = notes.format || "markdown";
 
   els.activeProfileTitle.textContent = profile.name || "当前方案";
-  els.deleteProfileBtn.disabled = appState.isRunning || (appState.config?.profiles || []).length <= 1;
+  els.deleteProfileBtn.disabled = isJobRunning() || (appState.config?.profiles || []).length <= 1;
   updateMediaModeWarning();
   updateGuide();
 }
@@ -404,7 +430,7 @@ function collectConfig(includePasswords = false) {
 }
 
 function isJobRunning() {
-  return appState.isRunning;
+  return activeProfileJob()?.status === "running";
 }
 
 function isStorageRestartRequired() {
@@ -429,7 +455,7 @@ function setRunning(isRunning) {
       field.disabled = isRunning;
     });
   els.form.classList.toggle("config-locked", isRunning);
-  els.addProfileBtn.disabled = isRunning;
+  els.addProfileBtn.disabled = false;
   els.saveProfileBtn.disabled = isRunning;
   els.deleteProfileBtn.disabled = isRunning || (appState.config?.profiles || []).length <= 1;
   els.authBtn.disabled = isRunning;
@@ -453,7 +479,10 @@ function renderJob(job) {
     stopped: "已停止",
   };
   const profileName = job?.profile_name ? ` · ${job.profile_name}` : "";
-  els.jobStatus.textContent = `${labels[status] || status}${profileName}`;
+  const otherRunningCount = Math.max(0, (appState.runningJobsCount || 0) - (status === "running" ? 1 : 0));
+  const waitingInputText = job?.waiting_input ? " · 等待输入" : "";
+  const otherJobsText = otherRunningCount > 0 ? ` · 另有 ${otherRunningCount} 个方案运行中` : "";
+  els.jobStatus.textContent = `${labels[status] || status}${profileName}${waitingInputText}${otherJobsText}`;
   els.jobStatus.className = "pill";
   if (status === "failed" || status === "stopped") {
     els.jobStatus.classList.add("error");
@@ -468,11 +497,16 @@ function renderJob(job) {
     if (shouldFollow) {
       els.logOutput.scrollTop = els.logOutput.scrollHeight;
     }
+  } else if (otherRunningCount > 0) {
+    els.logOutput.textContent = "当前方案暂无任务日志；可切换左侧运行中的方案查看对应进度。";
+  } else {
+    els.logOutput.textContent = "等待任务...";
   }
 }
 
 function renderStatus(status) {
   appState.status = status;
+  appState.runningJobsCount = status.running_jobs_count || 0;
   els.photoCount.textContent = status.counts?.photos ?? 0;
   els.videoCount.textContent = status.counts?.videos ?? 0;
   els.noteCount.textContent = status.counts?.notes ?? 0;
@@ -493,6 +527,7 @@ function renderStatus(status) {
   const lastMedia = status.state?.last_media_sync || "从未同步媒体";
   const lastNotes = status.state?.last_notes_sync || "从未导出备忘录";
   els.lastSync.textContent = `媒体: ${lastMedia} / 备忘录: ${lastNotes}`;
+  renderProfiles();
   renderJob(status.job || { status: "idle", log: [] });
   updateGuide();
 }
@@ -545,6 +580,7 @@ async function refreshStatus() {
   } catch (error) {
     els.jobStatus.textContent = "服务未连接";
     els.jobStatus.className = "pill error";
+    setRunning(false);
   }
 }
 
@@ -600,10 +636,6 @@ function releaseGuideStep() {
 }
 
 els.addProfileBtn.addEventListener("click", async () => {
-  if (isJobRunning()) {
-    showToast("任务运行中，暂不能新增方案");
-    return;
-  }
   try {
     releaseGuideStep();
     const config = await api("/api/profiles", {
@@ -797,7 +829,7 @@ async function sendConsoleInput(inputEl) {
   try {
     const job = await api("/api/job/input", {
       method: "POST",
-      body: JSON.stringify({ value }),
+      body: JSON.stringify({ profile_id: appState.activeProfileId, value }),
     });
     if (els.consoleInput) {
       els.consoleInput.value = "";
@@ -835,7 +867,10 @@ els.logConsoleInput.addEventListener("keydown", (event) => {
 
 els.stopJob.addEventListener("click", async () => {
   try {
-    const job = await api("/api/job/stop", { method: "POST", body: "{}" });
+    const job = await api("/api/job/stop", {
+      method: "POST",
+      body: JSON.stringify({ profile_id: appState.activeProfileId }),
+    });
     renderJob(job);
     showToast("任务已停止");
   } catch (error) {

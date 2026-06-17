@@ -122,7 +122,7 @@ DEFAULT_STORAGE_ROOT: dict[str, Any] = {
 config_lock = threading.RLock()
 job_lock = threading.RLock()
 stats_lock = threading.RLock()
-current_job: "Job | None" = None
+jobs_by_profile: dict[str, "Job"] = {}
 stats_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 
 
@@ -141,32 +141,38 @@ class Job:
     log_lines: list[str] = field(default_factory=list)
     log_path: Path | None = None
     error: str = ""
+    lock: threading.RLock = field(default_factory=threading.RLock, repr=False, compare=False)
 
     def append(self, text: str) -> None:
         line = text.rstrip("\n")
         timestamp = datetime.now().strftime("%H:%M:%S")
         formatted = f"[{timestamp}] {line}" if line else ""
-        self.log_lines.append(formatted)
-        if len(self.log_lines) > MAX_LOG_LINES:
-            self.log_lines = self.log_lines[-MAX_LOG_LINES:]
-        if self.log_path:
-            with self.log_path.open("a", encoding="utf-8") as handle:
+        with self.lock:
+            self.log_lines.append(formatted)
+            if len(self.log_lines) > MAX_LOG_LINES:
+                self.log_lines = self.log_lines[-MAX_LOG_LINES:]
+            log_path = self.log_path
+        if log_path:
+            with log_path.open("a", encoding="utf-8") as handle:
                 handle.write(formatted + "\n")
 
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "id": self.id,
-            "kind": self.kind,
-            "profile_id": self.profile_id,
-            "profile_name": self.profile_name,
-            "status": self.status,
-            "started_at": self.started_at,
-            "ended_at": self.ended_at,
-            "return_code": self.return_code,
-            "waiting_input": self.waiting_input,
-            "error": self.error,
-            "log": self.log_lines[-250:],
-        }
+    def to_dict(self, include_log: bool = True) -> dict[str, Any]:
+        with self.lock:
+            payload = {
+                "id": self.id,
+                "kind": self.kind,
+                "profile_id": self.profile_id,
+                "profile_name": self.profile_name,
+                "status": self.status,
+                "started_at": self.started_at,
+                "ended_at": self.ended_at,
+                "return_code": self.return_code,
+                "waiting_input": self.waiting_input,
+                "error": self.error,
+            }
+            if include_log:
+                payload["log"] = self.log_lines[-250:]
+        return payload
 
 
 class TextExtractor(HTMLParser):
@@ -539,39 +545,77 @@ def profile_cookie_dir(profile: dict[str, Any]) -> Path:
     return COOKIE_ROOT / profile["id"]
 
 
-def can_start_job() -> tuple[bool, str]:
+def profile_job(profile_id: str) -> Job | None:
     with job_lock:
-        if current_job and current_job.status == "running":
-            return False, "已有任务正在运行"
+        return jobs_by_profile.get(profile_id)
+
+
+def running_jobs_count() -> int:
+    with job_lock:
+        return sum(1 for job in jobs_by_profile.values() if job.status == "running")
+
+
+def can_start_job(profile_id: str) -> tuple[bool, str]:
+    with job_lock:
+        existing = jobs_by_profile.get(profile_id)
+        if existing and existing.status == "running":
+            return False, "当前方案已有任务正在运行"
     return True, ""
 
 
-def start_job(kind: str, profile_id: str, target, *args) -> Job:
-    global current_job
-    allowed, message = can_start_job()
-    if not allowed:
-        raise RuntimeError(message)
+def run_job_target(target, job: Job, profile_id: str, args: tuple[Any, ...]) -> None:
+    try:
+        target(job, profile_id, *args)
+    except Exception as exc:
+        finish_job(job, "failed", return_code=1, error=str(exc))
 
-    profile = get_profile(load_config(), profile_id)
+
+def start_job(kind: str, profile_id: str, target, *args) -> Job:
+    config = load_config()
+    profile = get_profile(config, profile_id)
     job = Job(kind=kind, profile_id=profile["id"], profile_name=profile["name"])
     log_dir = LOG_DIR / profile["id"]
     log_dir.mkdir(parents=True, exist_ok=True)
     job.log_path = log_dir / f"{datetime.now().strftime('%Y%m%d-%H%M%S')}-{kind}-{job.id}.log"
+    profiles_by_id = {
+        item["id"]: item for item in config.get("profiles", []) if isinstance(item, dict) and item.get("id")
+    }
+    target_dir = profile_data_dir(profile).resolve()
+
     with job_lock:
-        current_job = job
-    thread = threading.Thread(target=target, args=(job, profile["id"], *args), daemon=True)
+        existing = jobs_by_profile.get(profile["id"])
+        if existing and existing.status == "running":
+            raise RuntimeError("当前方案已有任务正在运行")
+        for other_profile_id, other_job in jobs_by_profile.items():
+            if other_profile_id == profile["id"] or other_job.status != "running":
+                continue
+            other_profile = profiles_by_id.get(other_profile_id)
+            if not other_profile:
+                continue
+            if profile_data_dir(other_profile).resolve() == target_dir:
+                raise RuntimeError(
+                    f"方案“{other_job.profile_name}”正在使用相同保存文件夹。并行运行前，请先为不同方案设置不同保存文件夹。"
+                )
+        jobs_by_profile[profile["id"]] = job
+    thread = threading.Thread(target=run_job_target, args=(target, job, profile["id"], args), daemon=True)
     thread.start()
     return job
 
 
 def finish_job(job: Job, status: str, return_code: int | None = None, error: str = "") -> None:
-    job.status = status
-    job.ended_at = utc_now()
-    job.return_code = return_code
-    job.error = error
+    with job.lock:
+        job.status = status
+        job.ended_at = utc_now()
+        job.return_code = return_code
+        job.error = error
     clear_profile_stats(job.profile_id)
     if error:
         job.append(f"错误: {error}")
+
+
+def is_job_stopped(job: Job) -> bool:
+    with job.lock:
+        return job.status == "stopped"
 
 
 def resolve_command(name: str) -> str | None:
@@ -611,10 +655,10 @@ def command_exists(name: str) -> bool:
 def wait_for_retry(job: Job, seconds: int) -> bool:
     deadline = time.time() + max(0, seconds)
     while time.time() < deadline:
-        if job.status == "stopped":
+        if is_job_stopped(job):
             return False
         time.sleep(min(1, deadline - time.time()))
-    return job.status != "stopped"
+    return not is_job_stopped(job)
 
 
 def build_base_icloudpd_args(
@@ -684,19 +728,23 @@ def run_process(job: Job, args: list[str]) -> int:
             bufsize=1,
         )
     except OSError as exc:
-        job.waiting_input = False
-        job.process = None
+        with job.lock:
+            job.waiting_input = False
+            job.process = None
         job.append(f"启动命令失败: {exc}")
         return 127
-    job.process = process
+    with job.lock:
+        job.process = process
     assert process.stdout is not None
     for line in process.stdout:
         if looks_like_input_prompt(line):
-            job.waiting_input = True
+            with job.lock:
+                job.waiting_input = True
         job.append(line)
     code = process.wait()
-    job.waiting_input = False
-    job.process = None
+    with job.lock:
+        job.waiting_input = False
+        job.process = None
     return code
 
 
@@ -793,7 +841,7 @@ def run_media_job(job: Job, profile_id: str) -> None:
     for title, args in commands:
         code = 1
         for attempt in range(retry_attempts + 1):
-            if job.status == "stopped":
+            if is_job_stopped(job):
                 code = -1
                 break
             if attempt == 0:
@@ -803,7 +851,7 @@ def run_media_job(job: Job, profile_id: str) -> None:
             code = run_process(job, args)
             if code == 0:
                 break
-            if job.status == "stopped":
+            if is_job_stopped(job):
                 break
             if attempt < retry_attempts:
                 job.append(f"同步{title}失败，返回码 {code}。{retry_delay_seconds} 秒后自动重试。")
@@ -816,7 +864,7 @@ def run_media_job(job: Job, profile_id: str) -> None:
 
     if final_code == 0:
         update_profile_state(profile_id, {"last_media_sync": utc_now()})
-    if job.status != "stopped":
+    if not is_job_stopped(job):
         finish_job(job, "success" if final_code == 0 else "failed", return_code=final_code)
 
 
@@ -1043,7 +1091,7 @@ def clear_profile_stats(profile_id: str) -> None:
         stats_cache.pop(profile_id, None)
 
 
-def profile_summary(profile: dict[str, Any]) -> dict[str, Any]:
+def profile_summary(profile: dict[str, Any], job: dict[str, Any] | None = None) -> dict[str, Any]:
     state = get_profile_state(profile["id"])
     return {
         "id": profile["id"],
@@ -1056,6 +1104,7 @@ def profile_summary(profile: dict[str, Any]) -> dict[str, Any]:
         "schedule_enabled": profile.get("schedule_enabled", False),
         "last_media_sync": state.get("last_media_sync", ""),
         "last_notes_sync": state.get("last_notes_sync", ""),
+        "job": job,
     }
 
 
@@ -1068,14 +1117,17 @@ def status_payload(profile_id: str | None = None) -> dict[str, Any]:
     restart_required = storage_root["selected_root_path"] != applied_root_path
     icloudpd_path = resolve_command("icloudpd")
     with job_lock:
-        job = current_job.to_dict() if current_job else None
+        profile_jobs = {job_profile_id: item.to_dict(include_log=False) for job_profile_id, item in jobs_by_profile.items()}
+        job = jobs_by_profile.get(profile["id"]).to_dict() if jobs_by_profile.get(profile["id"]) else None
+        active_jobs = sum(1 for item in jobs_by_profile.values() if item.status == "running")
     storage = profile_storage_stats(profile)
     return {
         "active_profile_id": config["active_profile_id"],
         "profile_id": profile["id"],
-        "profiles": [profile_summary(item) for item in config.get("profiles", [])],
+        "profiles": [profile_summary(item, profile_jobs.get(item["id"])) for item in config.get("profiles", [])],
         "state": state,
         "job": job,
+        "running_jobs_count": active_jobs,
         "paths": storage["paths"],
         "counts": storage["counts"],
         "bytes": storage["bytes"],
@@ -1128,10 +1180,9 @@ def scheduler_loop() -> None:
                     last_time = 0
                 if time.time() - last_time < interval:
                     continue
-                allowed, _ = can_start_job()
+                allowed, _ = can_start_job(profile["id"])
                 if allowed and (profile.get("photos_enabled") or profile.get("videos_enabled")):
                     start_job("scheduled-media-sync", profile["id"], run_media_job)
-                    break
         except Exception:
             continue
 
@@ -1181,6 +1232,9 @@ def api_select_profile(profile_id: str):
 @app.delete("/api/profiles/<profile_id>")
 def api_delete_profile(profile_id: str):
     payload = request.get_json(force=True, silent=True) or {}
+    running_job = profile_job(profile_id)
+    if running_job and running_job.status == "running":
+        return jsonify({"error": "请先停止当前方案的运行中任务，再删除方案"}), 409
     with config_lock:
         config = load_config()
         if len(config.get("profiles", [])) <= 1:
@@ -1205,6 +1259,8 @@ def api_delete_profile(profile_id: str):
                     shutil.rmtree(resolved)
             except OSError:
                 pass
+    with job_lock:
+        jobs_by_profile.pop(profile_id, None)
     clear_profile_stats(profile_id)
     return jsonify(public_config(load_config()))
 
@@ -1216,8 +1272,9 @@ def api_status():
 
 @app.get("/api/job")
 def api_job():
-    with job_lock:
-        return jsonify(current_job.to_dict() if current_job else {"status": "idle", "log": []})
+    profile_id = str(request.args.get("profile_id") or load_config().get("active_profile_id"))
+    job = profile_job(profile_id)
+    return jsonify(job.to_dict() if job else {"status": "idle", "log": []})
 
 
 @app.post("/api/auth")
@@ -1269,9 +1326,10 @@ def api_sync_notes():
 @app.post("/api/job/input")
 def api_job_input():
     payload = request.get_json(force=True, silent=True) or {}
+    profile_id = str(payload.get("profile_id") or load_config().get("active_profile_id"))
     value = str(payload.get("value") or "")
     with job_lock:
-        job = current_job
+        job = jobs_by_profile.get(profile_id)
         process = job.process if job else None
     if not job or not process or not process.stdin or job.status != "running":
         return jsonify({"error": "当前没有可输入的运行中任务"}), 409
@@ -1280,15 +1338,18 @@ def api_job_input():
         process.stdin.flush()
     except OSError:
         return jsonify({"error": "任务控制台已关闭，请查看最新日志确认任务状态"}), 409
-    job.waiting_input = False
+    with job.lock:
+        job.waiting_input = False
     job.append("已发送控制台输入")
     return jsonify(job.to_dict())
 
 
 @app.post("/api/job/stop")
 def api_job_stop():
+    payload = request.get_json(force=True, silent=True) or {}
+    profile_id = str(payload.get("profile_id") or load_config().get("active_profile_id"))
     with job_lock:
-        job = current_job
+        job = jobs_by_profile.get(profile_id)
         process = job.process if job else None
     if not job or job.status != "running":
         return jsonify({"error": "当前没有运行中任务"}), 409
