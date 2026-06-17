@@ -1,6 +1,14 @@
 #!/bin/bash
 
+APP_NAME="${TRIM_APPNAME:-icloud-sync}"
+PKGVAR="${TRIM_PKGVAR:-/var/apps/${APP_NAME}/var}"
 SERVICE_PORT="${TRIM_SERVICE_PORT:-8080}"
+LOG_DIR="${PKGVAR}/logs"
+RUN_DIR="${PKGVAR}/run"
+SERVICE_LOG="${LOG_DIR}/service.log"
+CONFIG_INIT_LOG="${LOG_DIR}/config_init.log"
+CONFIG_CALLBACK_LOG="${LOG_DIR}/config_callback.log"
+PID_FILE="${RUN_DIR}/icloud-sync.pid"
 
 cat <<HTML
 Content-Type: text/html; charset=utf-8
@@ -590,11 +598,22 @@ Content-Type: text/html; charset=utf-8
             <div class="actions">
               <a class="primary" id="openLink" href="#" rel="noreferrer">立即尝试进入</a>
               <button type="button" onclick="checkNow()">重新检测</button>
+              <button type="button" onclick="toggleDiagnostics()">查看日志</button>
             </div>
           </aside>
           <div class="diagnostics" id="diagnostics">
-            <strong>等待时间较长时，请先在应用中心停止后重新启动本应用。</strong>
-            <code>如果仍无法进入，可以打开应用日志查看启动详情。</code>
+            <strong>后端还没有响应，先看这些位置。</strong>
+            <code>服务日志：${SERVICE_LOG}
+设置页日志：${CONFIG_INIT_LOG}
+设置保存日志：${CONFIG_CALLBACK_LOG}
+PID 文件：${PID_FILE}
+
+SSH 排查命令：
+tail -n 200 "${SERVICE_LOG}"
+ls -lah "${LOG_DIR}"
+cat "${PID_FILE}" 2>/dev/null || true
+ss -lntp | grep ":${SERVICE_PORT}" || netstat -lntp 2>/dev/null | grep ":${SERVICE_PORT}" || true
+ps -ef | grep -E "waitress|icloudpd|icloud-sync" | grep -v grep</code>
           </div>
           <div class="ticker">
             <div class="tickerTrack">
@@ -636,6 +655,7 @@ Content-Type: text/html; charset=utf-8
 
       openLink.href = bestUrl;
       serviceText.textContent = "正在连接服务";
+      candidateList.innerHTML = candidates.map((url) => "<span>检测地址：" + url + "api/status</span>").join("");
       candidateList.hidden = true;
 
       function setStep(id, className) {
@@ -648,16 +668,27 @@ Content-Type: text/html; charset=utf-8
         message.textContent = text;
       }
 
+      function showDiagnostics() {
+        diagnostics.classList.add("show");
+        candidateList.hidden = false;
+      }
+
+      function toggleDiagnostics() {
+        diagnostics.classList.toggle("show");
+        candidateList.hidden = !diagnostics.classList.contains("show");
+      }
+
       function updateElapsed() {
         const seconds = Math.floor((Date.now() - startedAt) / 1000);
         elapsedEl.textContent = "已等待 " + seconds + " 秒，检测 " + attempts + " 次。";
         if (seconds > 16 && seconds <= 120) {
           setStep("stepDeps", "active");
           setCurrentStep("初始化运行环境", "同步服务仍在准备中，首次启动可能需要数分钟，请稍等。");
+          showDiagnostics();
         }
         if (seconds > 120) {
           setStep("stepService", "error");
-          diagnostics.classList.add("show");
+          showDiagnostics();
           setCurrentStep("需要重新启动", "等待时间较长，请先在应用中心停止后重新启动本应用。");
         }
       }
