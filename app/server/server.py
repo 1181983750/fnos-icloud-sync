@@ -674,14 +674,20 @@ def build_base_icloudpd_args(
 def run_process(job: Job, args: list[str]) -> int:
     safe_args = mask_command(args)
     job.append("$ " + " ".join(safe_args))
-    process = subprocess.Popen(
-        args,
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        bufsize=1,
-    )
+    try:
+        process = subprocess.Popen(
+            args,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+        )
+    except OSError as exc:
+        job.waiting_input = False
+        job.process = None
+        job.append(f"启动命令失败: {exc}")
+        return 127
     job.process = process
     assert process.stdout is not None
     for line in process.stdout:
@@ -738,9 +744,11 @@ def run_auth_job(job: Job, profile_id: str, password: str) -> None:
 
     root = profile_data_dir(profile)
     cookie_dir = profile_cookie_dir(profile)
+    auth_dir = root / "auth-check"
     root.mkdir(parents=True, exist_ok=True)
     cookie_dir.mkdir(parents=True, exist_ok=True)
-    args = build_base_icloudpd_args(profile, root / "auth-check", cookie_dir, password=password, include_media_mode=False)
+    auth_dir.mkdir(parents=True, exist_ok=True)
+    args = build_base_icloudpd_args(profile, auth_dir, cookie_dir, password=password, include_media_mode=False)
     args.append("--auth-only")
     code = run_process(job, args)
     finish_job(job, "success" if code == 0 else "failed", return_code=code)
@@ -1102,6 +1110,8 @@ def scheduler_loop() -> None:
     while True:
         time.sleep(60)
         try:
+            if storage_mount_needs_recreate():
+                continue
             config = load_config()
             for profile in config.get("profiles", []):
                 if not profile.get("schedule_enabled"):
@@ -1265,8 +1275,11 @@ def api_job_input():
         process = job.process if job else None
     if not job or not process or not process.stdin or job.status != "running":
         return jsonify({"error": "当前没有可输入的运行中任务"}), 409
-    process.stdin.write(value + "\n")
-    process.stdin.flush()
+    try:
+        process.stdin.write(value + "\n")
+        process.stdin.flush()
+    except OSError:
+        return jsonify({"error": "任务控制台已关闭，请查看最新日志确认任务状态"}), 409
     job.waiting_input = False
     job.append("已发送控制台输入")
     return jsonify(job.to_dict())

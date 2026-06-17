@@ -1,6 +1,11 @@
 #!/bin/bash
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
+
 mkdir -p "${TRIM_PKGVAR}/config" "${TRIM_PKGVAR}/logs"
+for script in main config_init config_callback install_init install_callback upgrade_init upgrade_callback uninstall_init uninstall_callback; do
+    chmod +x "${SCRIPT_DIR}/${script}" 2>/dev/null || true
+done
 chmod +x "${TRIM_APPDEST}/ui/index.cgi" 2>/dev/null || true
 
 mkdir -p "/var/apps/${TRIM_APPNAME}/shares/icloud/photos" \
