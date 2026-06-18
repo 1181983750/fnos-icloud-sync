@@ -12,6 +12,7 @@ import subprocess
 import sys
 import threading
 import time
+import traceback
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -106,6 +107,8 @@ DEFAULT_PROFILE_STATE: dict[str, Any] = {
     "last_media_sync": "",
     "last_notes_sync": "",
     "last_scheduler_check": "",
+    "last_media_schedule_attempt": "",
+    "last_notes_schedule_attempt": "",
 }
 
 DEFAULT_STATE: dict[str, Any] = {
@@ -572,10 +575,16 @@ def running_jobs_count() -> int:
         return sum(1 for job in jobs_by_profile.values() if job.status == "running")
 
 
+def job_has_live_process(job: Job) -> bool:
+    with job.lock:
+        process = job.process
+    return bool(process and process.poll() is None)
+
+
 def can_start_job(profile_id: str) -> tuple[bool, str]:
     with job_lock:
         existing = jobs_by_profile.get(profile_id)
-        if existing and existing.status == "running":
+        if existing and (existing.status == "running" or job_has_live_process(existing)):
             return False, "当前方案已有任务正在运行"
     return True, ""
 
@@ -601,7 +610,7 @@ def start_job(kind: str, profile_id: str, target, *args) -> Job:
 
     with job_lock:
         existing = jobs_by_profile.get(profile["id"])
-        if existing and existing.status == "running":
+        if existing and (existing.status == "running" or job_has_live_process(existing)):
             raise RuntimeError("当前方案已有任务正在运行")
         for other_profile_id, other_job in jobs_by_profile.items():
             if other_profile_id == profile["id"] or other_job.status != "running":
@@ -743,15 +752,18 @@ def build_base_icloudpd_args(
 def run_process(job: Job, args: list[str]) -> int:
     safe_args = mask_command(args)
     job.append("$ " + " ".join(safe_args))
+    popen_kwargs: dict[str, Any] = {
+        "args": args,
+        "stdin": subprocess.PIPE,
+        "stdout": subprocess.PIPE,
+        "stderr": subprocess.STDOUT,
+        "text": True,
+        "bufsize": 1,
+    }
+    if os.name != "nt":
+        popen_kwargs["start_new_session"] = True
     try:
-        process = subprocess.Popen(
-            args,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1,
-        )
+        process = subprocess.Popen(**popen_kwargs)
     except OSError as exc:
         with job.lock:
             job.waiting_input = False
@@ -774,6 +786,37 @@ def run_process(job: Job, args: list[str]) -> int:
         job.waiting_input = False
         job.process = None
     return code
+
+
+def terminate_process(process: subprocess.Popen[str], timeout_seconds: int = 10) -> int | None:
+    if process.poll() is not None:
+        return process.returncode
+
+    def send_signal(sig: signal.Signals) -> None:
+        try:
+            if os.name != "nt":
+                os.killpg(process.pid, sig)
+            elif sig == signal.SIGTERM:
+                process.terminate()
+            else:
+                process.kill()
+        except ProcessLookupError:
+            pass
+        except OSError:
+            try:
+                process.terminate() if sig == signal.SIGTERM else process.kill()
+            except OSError:
+                pass
+
+    send_signal(signal.SIGTERM)
+    try:
+        return process.wait(timeout=timeout_seconds)
+    except subprocess.TimeoutExpired:
+        send_signal(getattr(signal, "SIGKILL", signal.SIGTERM))
+        try:
+            return process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            return None
 
 
 def mask_command(args: list[str]) -> list[str]:
@@ -1187,6 +1230,42 @@ def storage_mount_error_response():
     }), 409
 
 
+def timestamp_or_zero(value: Any) -> float:
+    text = str(value or "").strip()
+    if not text:
+        return 0
+    try:
+        return datetime.fromisoformat(text).timestamp()
+    except ValueError:
+        return 0
+
+
+def schedule_due(state: dict[str, Any], success_key: str, attempt_key: str, interval_seconds: int) -> bool:
+    last_time = max(timestamp_or_zero(state.get(success_key)), timestamp_or_zero(state.get(attempt_key)))
+    return time.time() - last_time >= interval_seconds
+
+
+def mark_schedule_attempt(profile_id: str, attempt_key: str) -> None:
+    now = utc_now()
+    update_profile_state(profile_id, {
+        attempt_key: now,
+        "last_scheduler_check": now,
+    })
+
+
+def log_scheduler_exception(exc: Exception, profile_id: str = "") -> None:
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    context = f" profile={profile_id}" if profile_id else ""
+    message = f"[{timestamp}] scheduler error{context}: {exc}\n{traceback.format_exc()}"
+    try:
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        with (LOG_DIR / "scheduler.log").open("a", encoding="utf-8") as handle:
+            handle.write(message + "\n")
+    except OSError:
+        pass
+    print(message, file=sys.stderr, flush=True)
+
+
 def scheduler_loop() -> None:
     while True:
         time.sleep(60)
@@ -1194,26 +1273,44 @@ def scheduler_loop() -> None:
             if storage_mount_needs_recreate():
                 continue
             config = load_config()
-            for profile in config.get("profiles", []):
+        except Exception as exc:
+            log_scheduler_exception(exc)
+            continue
+
+        for profile in config.get("profiles", []):
+            try:
                 if not profile.get("schedule_enabled"):
                     continue
                 state = get_profile_state(profile["id"])
                 interval = max(15, int_or_default(profile.get("sync_interval_minutes"), 360)) * 60
-                last_value = state.get("last_media_sync") or ""
-                if last_value:
-                    try:
-                        last_time = datetime.fromisoformat(last_value).timestamp()
-                    except ValueError:
-                        last_time = 0
-                else:
-                    last_time = 0
-                if time.time() - last_time < interval:
+
+                media_enabled = profile.get("photos_enabled") or profile.get("videos_enabled")
+                media_due = media_enabled and schedule_due(
+                    state,
+                    "last_media_sync",
+                    "last_media_schedule_attempt",
+                    interval,
+                )
+                notes_due = profile.get("notes_enabled") and schedule_due(
+                    state,
+                    "last_notes_sync",
+                    "last_notes_schedule_attempt",
+                    interval,
+                )
+                if not media_due and not notes_due:
                     continue
                 allowed, _ = can_start_job(profile["id"])
-                if allowed and (profile.get("photos_enabled") or profile.get("videos_enabled")):
+                if not allowed:
+                    continue
+                if media_due:
+                    mark_schedule_attempt(profile["id"], "last_media_schedule_attempt")
                     start_job("scheduled-media-sync", profile["id"], run_media_job)
-        except Exception:
-            continue
+                    continue
+                if notes_due:
+                    mark_schedule_attempt(profile["id"], "last_notes_schedule_attempt")
+                    start_job("scheduled-notes-export", profile["id"], run_notes_job)
+            except Exception as exc:
+                log_scheduler_exception(exc, str(profile.get("id") or ""))
 
 
 @app.get("/")
@@ -1379,14 +1476,19 @@ def api_job_stop():
     profile_id = str(payload.get("profile_id") or load_config().get("active_profile_id"))
     with job_lock:
         job = jobs_by_profile.get(profile_id)
-        process = job.process if job else None
-    if not job or job.status != "running":
+    if not job:
+        return jsonify({"error": "当前没有运行中任务"}), 409
+    with job.lock:
+        process = job.process
+        job_status = job.status
+    if job_status != "running":
         return jsonify({"error": "当前没有运行中任务"}), 409
     if process and process.poll() is None:
-        try:
-            process.send_signal(signal.SIGTERM)
-        except Exception:
-            process.kill()
+        job.append("正在停止任务...")
+        return_code = terminate_process(process)
+        if return_code is None:
+            finish_job(job, "failed", return_code=1, error="任务停止超时，请稍后检查进程是否仍在运行")
+            return jsonify(job.to_dict()), 500
     finish_job(job, "stopped", return_code=-1)
     return jsonify(job.to_dict())
 
