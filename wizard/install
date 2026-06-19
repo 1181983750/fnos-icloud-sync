@@ -4,7 +4,7 @@
     "items": [
       {
         "type": "tips",
-        "helpText": "安装后请打开 iCloud 同步面板填写 Apple ID 并完成认证。照片和视频使用 icloudpd 一向下载到 NAS，本应用不会删除 iCloud 云端数据，除非你在面板里显式开启本地同步删除。"
+        "helpText": "安装前会检查系统里是否存在可用的 Python 3.12，并要求 python3.12 -m venv 可用；如果缺少 Python 3.12，安装会中止并提示先安装。安装后请打开 iCloud 同步面板填写 Apple ID 并完成认证。照片和视频使用 icloudpd 下载到 NAS，本应用不会删除 iCloud 云端数据，除非你在面板里显式开启本地同步删除。"
       },
       {
         "type": "switch",

@@ -59,13 +59,25 @@ signal_process_tree() {
 }
 
 find_python() {
-    if [ -n "${PYTHON_BIN:-}" ] && command -v "$PYTHON_BIN" >/dev/null 2>&1; then
+    python_is_312() {
+        candidate="$1"
+        [ -n "$candidate" ] || return 1
+        command -v "$candidate" >/dev/null 2>&1 || return 1
+
+        version="$("$candidate" -c 'import sys; print(f"{sys.version_info[0]}.{sys.version_info[1]}")' 2>/dev/null || true)"
+        [ "$version" = "3.12" ] || return 1
+
+        "$candidate" -m venv --help >/dev/null 2>&1 || return 1
+        return 0
+    }
+
+    if [ -n "${PYTHON_BIN:-}" ] && python_is_312 "$PYTHON_BIN"; then
         command -v "$PYTHON_BIN"
         return 0
     fi
 
     for candidate in python3.12 /usr/local/bin/python3.12 /usr/bin/python3.12 python3 python; do
-        if command -v "$candidate" >/dev/null 2>&1; then
+        if python_is_312 "$candidate"; then
             command -v "$candidate"
             return 0
         fi
@@ -110,7 +122,7 @@ ensure_venv() {
     fi
 
     python_bin="$(find_python)" || {
-        log_message "no Python interpreter found; expected python3.12 or python3"
+        log_message "no Python 3.12 interpreter found; expected python3.12 with venv support"
         return 1
     }
 
