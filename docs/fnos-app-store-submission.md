@@ -4,15 +4,15 @@
 
 - 应用名称：iCloud 同步
 - 应用包名：icloud-sync
-- 当前版本：0.3.5
+- 当前版本：0.3.11
 - 应用类型：原生 FPK 应用
 - 支持平台：x86_64
 - 最低系统版本：fnOS 1.1.8
 - 服务端口：8080
 - GitHub 仓库：https://github.com/1181983750/fnos-icloud-sync
-- Release 地址：待创建 `v0.3.5` GitHub Release 后补充
-- FPK 下载地址：待上传 `icloud-sync-0.3.5.fpk` 后补充
-- FPK SHA256：32CFC399D6667B6C926EEB7412EF14887C870E5469C55A04052841450608FE54
+- Release 地址：https://github.com/1181983750/fnos-icloud-sync/releases/tag/v0.3.11
+- FPK 下载地址：https://github.com/1181983750/fnos-icloud-sync/releases/download/v0.3.11/icloud-sync-0.3.11.fpk
+- FPK SHA256：6DF19EA4968C862DF24FAC74D3856C55CABF5A56DCF08FC103FAD11FFB692031
 
 ## 应用简介
 
@@ -49,7 +49,7 @@ iCloud 同步是在飞牛 NAS 上运行的 iCloud 数据同步工具。应用通
 
 ## 使用注意事项
 
-- 安装前会检查系统里是否存在可用的 Python 3.12 和 `venv` 支持；通过后首次启动会创建 Python 虚拟环境并安装内置依赖。
+- 安装前会优先检查系统里是否存在可用的 Python 3.11.x 和 `venv` 支持；通过后首次启动会创建 Python 虚拟环境并安装内置依赖。若系统缺少 Python 3.11，请先安装 python311/python3.11。
 - 修改同步根目录后必须在应用中心停止并重新启动应用；如果页面提示当前服务仍在使用旧位置，说明当前任务仍会写入旧目录。
 - 如果启用“下载后删除 iCloud 云端”，请先确认 NAS 文件完整且有额外备份；不建议与相册、资料库、最近天数等过滤条件混用，除非明确知道会影响哪些媒体。
 - iCloud 登录可能触发双重认证，用户需要在页面右侧验证码输入框中发送验证码。
@@ -63,7 +63,7 @@ iCloud 同步是在飞牛 NAS 上运行的 iCloud 数据同步工具。应用通
 
 1. 在 fnOS 应用中心手动安装 `icloud-sync-0.3.5.fpk`。
 2. 启动应用，确认桌面入口可以直接进入 iCloud 同步面板。
-3. 如果安装前提示缺少 Python 3.12，请先在系统里安装 Python 3.12 并确认 `python3.12 -m venv --help` 可执行；首次启动较慢时，等待原生服务完成虚拟环境和依赖准备。
+3. 如果安装前提示缺少 Python 3.11，请先在系统里安装 Python 3.11 并确认 `python3.11 -m venv --help` 可执行；如果系统 `python3` 已指向 3.11，也可以直接复用。首次启动较慢时，等待原生服务完成虚拟环境和依赖准备。
 4. 打开 `/api/status`，确认 `icloudpd_available` 为 `true`，并能看到 `icloudpd_path`。
 5. 在应用设置里确认默认共享目录为 `应用文件/icloud`。
 6. 选择一个已授权目录作为同步根目录，保存后停止并重新启动应用，确认面板直接展示照片、视频、备忘录最终保存位置。
@@ -74,4 +74,4 @@ iCloud 同步是在飞牛 NAS 上运行的 iCloud 数据同步工具。应用通
 
 ## Release 说明
 
-0.3.5 桌面入口改为飞牛标准 `port/url` 代理直达同步面板，修复外网访问时等待页探测裸 `8080` 失败的问题；任务模型改为按方案隔离，同一方案一次一个任务，不同方案之间允许并行运行认证、媒体同步或备忘录导出。
+0.3.11 改为优先复用系统自带 Python 3.11.x，缺失时在安装或升级前提示安装 python311/python3.11；内置 Linux x86_64 MarkupSafe wheel 切换为 cp311，确保离线依赖安装与目标运行时一致。

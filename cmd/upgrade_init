@@ -1,2 +1,3 @@
 #!/bin/bash
-exit 0
+SCRIPT_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
+exec /bin/bash "${SCRIPT_DIR}/install_init"

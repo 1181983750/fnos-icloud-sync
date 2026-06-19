@@ -17,7 +17,7 @@ PID_FILE="${RUN_DIR}/icloud-sync.pid"
 LOG_FILE="${LOG_DIR}/service.log"
 REQUIREMENTS_FILE="${SERVER_DIR}/requirements.txt"
 WHEEL_DIR="${SERVER_DIR}/wheels"
-SENTINEL_FILE="${VENV_DIR}/.icloud-sync-native-0.3.0"
+SENTINEL_FILE="${VENV_DIR}/.icloud-sync-native-python311-0.3.11"
 SERVICE_PORT="${TRIM_SERVICE_PORT:-8080}"
 DEFAULT_SYNC_ROOT="/var/apps/${APP_NAME}/shares/icloud"
 
@@ -59,30 +59,38 @@ signal_process_tree() {
 }
 
 find_python() {
-    python_is_312() {
+    python_is_311() {
         candidate="$1"
         [ -n "$candidate" ] || return 1
         command -v "$candidate" >/dev/null 2>&1 || return 1
 
         version="$("$candidate" -c 'import sys; print(f"{sys.version_info[0]}.{sys.version_info[1]}")' 2>/dev/null || true)"
-        [ "$version" = "3.12" ] || return 1
+        [ "$version" = "3.11" ] || return 1
 
         "$candidate" -m venv --help >/dev/null 2>&1 || return 1
         return 0
     }
 
-    if [ -n "${PYTHON_BIN:-}" ] && python_is_312 "$PYTHON_BIN"; then
+    if [ -n "${PYTHON_BIN:-}" ] && python_is_311 "$PYTHON_BIN"; then
         command -v "$PYTHON_BIN"
         return 0
     fi
 
-    for candidate in python3.12 /usr/local/bin/python3.12 /usr/bin/python3.12 python3 python; do
-        if python_is_312 "$candidate"; then
+    for candidate in python3.11 /usr/local/bin/python3.11 /usr/bin/python3.11 python3 python; do
+        if python_is_311 "$candidate"; then
             command -v "$candidate"
             return 0
         fi
     done
     return 1
+}
+
+venv_is_python311() {
+    [ -x "${VENV_DIR}/bin/python" ] || return 1
+    version="$("${VENV_DIR}/bin/python" -c 'import sys; print(f"{sys.version_info[0]}.{sys.version_info[1]}")' 2>/dev/null || true)"
+    [ "$version" = "3.11" ] || return 1
+    [ -x "${VENV_DIR}/bin/waitress-serve" ] || return 1
+    return 0
 }
 
 stop_legacy_docker_container() {
@@ -117,14 +125,19 @@ install_requirements_online() {
 }
 
 ensure_venv() {
-    if [ -x "${VENV_DIR}/bin/python" ] && [ -f "$SENTINEL_FILE" ]; then
+    if [ -f "$SENTINEL_FILE" ] && venv_is_python311; then
         return 0
     fi
 
     python_bin="$(find_python)" || {
-        log_message "no Python 3.12 interpreter found; expected python3.12 with venv support"
+        log_message "no Python 3.11 interpreter found; expected python3.11 or system python3 pointing to 3.11 with venv support"
         return 1
     }
+
+    if [ -d "$VENV_DIR" ] && ! venv_is_python311; then
+        log_message "existing venv is not Python 3.11 or is incomplete; recreating"
+        rm -rf "$VENV_DIR"
+    fi
 
     mkdir -p "$VENV_DIR" "$PIP_CACHE_DIR" 2>/dev/null || return 1
     log_message "using Python interpreter: $python_bin"
