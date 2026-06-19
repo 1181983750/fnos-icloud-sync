@@ -4,17 +4,17 @@
 
 - 应用名称：iCloud 同步
 - 应用包名：icloud-sync
-- 当前版本：0.3.12
+- 当前版本：0.3.13
 - 应用类型：原生 FPK 应用
 - 支持平台：x86_64
 - 最低系统版本：fnOS 1.1.8
 - 服务端口：8080
-- 开发者：1181983750
-- 发布者：1181983750
+- 开发者：甲亢哥
+- 发布者：甲亢哥
 - GitHub 仓库：https://github.com/1181983750/fnos-icloud-sync
-- Release 地址：https://github.com/1181983750/fnos-icloud-sync/releases/tag/v0.3.12
-- FPK 下载地址：https://github.com/1181983750/fnos-icloud-sync/releases/download/v0.3.12/icloud-sync-0.3.12.fpk
-- FPK SHA256：A61D52C57D6A77C88D1D88AD12FDB42F2B734C73F41751A9C62E2FEE80550D14
+- Release 地址：https://github.com/1181983750/fnos-icloud-sync/releases/tag/v0.3.13
+- FPK 下载地址：https://github.com/1181983750/fnos-icloud-sync/releases/download/v0.3.13/icloud-sync-0.3.13.fpk
+- FPK SHA256：621EDC9D62931370FF72EC9E3FD7D0781415958A16F20223F3CB28CA53BD75A6
 
 ## 应用简介
 
@@ -76,4 +76,4 @@ iCloud 同步是在飞牛 NAS 上运行的 iCloud 数据同步工具。应用通
 
 ## Release 说明
 
-0.3.12 将开发者和发布者信息改为 GitHub 用户 1181983750，并把相关链接指向 GitHub 主页，避免安装信息继续显示 local。
+0.3.13 将开发者和发布者显示名改为 GitHub 艺名“甲亢哥”，并把相关链接改为源码仓库地址。
