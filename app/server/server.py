@@ -109,6 +109,11 @@ DEFAULT_PROFILE_STATE: dict[str, Any] = {
     "last_scheduler_check": "",
     "last_media_schedule_attempt": "",
     "last_notes_schedule_attempt": "",
+    "last_scheduler_trigger": "",
+    "scheduler_check_count": 0,
+    "scheduler_trigger_count": 0,
+    "last_scheduler_status": "",
+    "last_scheduler_message": "",
 }
 
 DEFAULT_STATE: dict[str, Any] = {
@@ -201,6 +206,20 @@ class TextExtractor(HTMLParser):
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
+def timestamp_to_iso(timestamp: float) -> str:
+    return datetime.fromtimestamp(timestamp, timezone.utc).replace(microsecond=0).isoformat()
+
+
+def iso_to_timestamp(value: Any) -> float:
+    text = str(value or "").strip()
+    if not text:
+        return 0
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return 0
 
 
 def deep_copy(value: Any) -> Any:
@@ -1163,8 +1182,60 @@ def clear_profile_stats(profile_id: str) -> None:
         stats_cache.pop(profile_id, None)
 
 
+def scheduler_payload(profile: dict[str, Any], state: dict[str, Any], now_ts: float | None = None) -> dict[str, Any]:
+    now = time.time() if now_ts is None else now_ts
+    schedule_enabled = bool(profile.get("schedule_enabled"))
+    media_enabled = bool(profile.get("photos_enabled") or profile.get("videos_enabled"))
+    notes_enabled = bool(profile.get("notes_enabled"))
+    content_enabled = media_enabled or notes_enabled
+    interval_minutes = max(15, int_or_default(profile.get("sync_interval_minutes"), 360))
+    interval_seconds = interval_minutes * 60
+    last_media_ts = max(
+        iso_to_timestamp(state.get("last_media_sync")),
+        iso_to_timestamp(state.get("last_media_schedule_attempt")),
+    )
+    last_notes_ts = max(
+        iso_to_timestamp(state.get("last_notes_sync")),
+        iso_to_timestamp(state.get("last_notes_schedule_attempt")),
+    )
+    media_next_ts = (last_media_ts + interval_seconds) if last_media_ts else now
+    notes_next_ts = (last_notes_ts + interval_seconds) if last_notes_ts else now
+    next_candidates = []
+    if media_enabled:
+        next_candidates.append(media_next_ts)
+    if notes_enabled:
+        next_candidates.append(notes_next_ts)
+    next_ts = min(next_candidates) if next_candidates else now
+    seconds_until_next = max(0, int(next_ts - now))
+    active = schedule_enabled and content_enabled
+    media_due = active and media_enabled and now >= media_next_ts
+    notes_due = active and notes_enabled and now >= notes_next_ts
+
+    return {
+        "schedule_enabled": schedule_enabled,
+        "media_enabled": media_enabled,
+        "notes_enabled": notes_enabled,
+        "content_enabled": content_enabled,
+        "active": active,
+        "interval_minutes": interval_minutes,
+        "loop_interval_seconds": 60,
+        "last_check": state.get("last_scheduler_check", ""),
+        "last_trigger": state.get("last_scheduler_trigger", ""),
+        "check_count": max(0, int_or_default(state.get("scheduler_check_count"), 0)),
+        "trigger_count": max(0, int_or_default(state.get("scheduler_trigger_count"), 0)),
+        "last_status": state.get("last_scheduler_status", ""),
+        "last_message": state.get("last_scheduler_message", ""),
+        "next_run": timestamp_to_iso(max(next_ts, now)) if active else "",
+        "seconds_until_next": seconds_until_next if active else None,
+        "media_due": media_due,
+        "notes_due": notes_due,
+        "due": media_due or notes_due,
+    }
+
+
 def profile_summary(profile: dict[str, Any], job: dict[str, Any] | None = None) -> dict[str, Any]:
     state = get_profile_state(profile["id"])
+    scheduler = scheduler_payload(profile, state)
     return {
         "id": profile["id"],
         "name": profile["name"],
@@ -1176,6 +1247,7 @@ def profile_summary(profile: dict[str, Any], job: dict[str, Any] | None = None) 
         "schedule_enabled": profile.get("schedule_enabled", False),
         "last_media_sync": state.get("last_media_sync", ""),
         "last_notes_sync": state.get("last_notes_sync", ""),
+        "scheduler": scheduler,
         "job": job,
     }
 
@@ -1198,6 +1270,7 @@ def status_payload(profile_id: str | None = None) -> dict[str, Any]:
         "profile_id": profile["id"],
         "profiles": [profile_summary(item, profile_jobs.get(item["id"])) for item in config.get("profiles", [])],
         "state": state,
+        "scheduler": scheduler_payload(profile, state),
         "job": job,
         "running_jobs_count": active_jobs,
         "paths": storage["paths"],
@@ -1270,9 +1343,8 @@ def scheduler_loop() -> None:
     while True:
         time.sleep(60)
         try:
-            if storage_mount_needs_recreate():
-                continue
             config = load_config()
+            mount_needs_recreate = storage_mount_needs_recreate()
         except Exception as exc:
             log_scheduler_exception(exc)
             continue
@@ -1282,33 +1354,83 @@ def scheduler_loop() -> None:
                 if not profile.get("schedule_enabled"):
                     continue
                 state = get_profile_state(profile["id"])
-                interval = max(15, int_or_default(profile.get("sync_interval_minutes"), 360)) * 60
+                now_ts = time.time()
+                now_iso = timestamp_to_iso(now_ts)
+                scheduler = scheduler_payload(profile, state, now_ts)
+                updates = {
+                    "last_scheduler_check": now_iso,
+                    "scheduler_check_count": scheduler["check_count"] + 1,
+                    "last_scheduler_status": "checked",
+                    "last_scheduler_message": "尚未到下次同步时间",
+                }
+                if not scheduler["content_enabled"]:
+                    updates.update({
+                        "last_scheduler_status": "skipped",
+                        "last_scheduler_message": "未选择照片、视频或备忘录，已跳过计划同步",
+                    })
+                    update_profile_state(profile["id"], updates)
+                    continue
+                if mount_needs_recreate:
+                    updates.update({
+                        "last_scheduler_status": "blocked",
+                        "last_scheduler_message": "同步根目录尚未重启生效，已跳过本次检查",
+                    })
+                    update_profile_state(profile["id"], updates)
+                    continue
+                if not scheduler["due"]:
+                    update_profile_state(profile["id"], updates)
+                    continue
 
-                media_enabled = profile.get("photos_enabled") or profile.get("videos_enabled")
-                media_due = media_enabled and schedule_due(
-                    state,
-                    "last_media_sync",
-                    "last_media_schedule_attempt",
-                    interval,
-                )
-                notes_due = profile.get("notes_enabled") and schedule_due(
-                    state,
-                    "last_notes_sync",
-                    "last_notes_schedule_attempt",
-                    interval,
-                )
-                if not media_due and not notes_due:
-                    continue
-                allowed, _ = can_start_job(profile["id"])
+                allowed, reason = can_start_job(profile["id"])
                 if not allowed:
+                    updates.update({
+                        "last_scheduler_status": "skipped",
+                        "last_scheduler_message": reason or "当前方案已有任务正在运行，已等待下次检查",
+                    })
+                    update_profile_state(profile["id"], updates)
                     continue
-                if media_due:
-                    mark_schedule_attempt(profile["id"], "last_media_schedule_attempt")
-                    start_job("scheduled-media-sync", profile["id"], run_media_job)
+
+                if scheduler["media_due"]:
+                    attempt_key = "last_media_schedule_attempt"
+                    job_kind = "scheduled-media-sync"
+                    job_target = run_media_job
+                    starting_message = "正在启动计划媒体同步任务"
+                    started_message = "已启动计划媒体同步任务"
+                elif scheduler["notes_due"]:
+                    attempt_key = "last_notes_schedule_attempt"
+                    job_kind = "scheduled-notes-export"
+                    job_target = run_notes_job
+                    starting_message = "正在启动计划备忘录导出"
+                    started_message = "已启动计划备忘录导出"
+                else:
+                    updates.update({
+                        "last_scheduler_status": "skipped",
+                        "last_scheduler_message": "没有到期的计划任务",
+                    })
+                    update_profile_state(profile["id"], updates)
                     continue
-                if notes_due:
-                    mark_schedule_attempt(profile["id"], "last_notes_schedule_attempt")
-                    start_job("scheduled-notes-export", profile["id"], run_notes_job)
+
+                updates.update({
+                    attempt_key: now_iso,
+                    "last_scheduler_status": "starting",
+                    "last_scheduler_message": starting_message,
+                })
+                update_profile_state(profile["id"], updates)
+                try:
+                    start_job(job_kind, profile["id"], job_target)
+                except Exception as exc:
+                    update_profile_state(profile["id"], {
+                        "last_scheduler_status": "failed",
+                        "last_scheduler_message": str(exc),
+                    })
+                    log_scheduler_exception(exc, str(profile.get("id") or ""))
+                else:
+                    update_profile_state(profile["id"], {
+                        "last_scheduler_trigger": now_iso,
+                        "scheduler_trigger_count": scheduler["trigger_count"] + 1,
+                        "last_scheduler_status": "started",
+                        "last_scheduler_message": started_message,
+                    })
             except Exception as exc:
                 log_scheduler_exception(exc, str(profile.get("id") or ""))
 

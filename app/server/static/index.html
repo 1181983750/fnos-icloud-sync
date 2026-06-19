@@ -14,6 +14,7 @@
           <h1>iCloud 同步方案</h1>
         </div>
         <div class="status-strip">
+          <span id="schedulerStatus" class="pill neutral">计划同步未启用</span>
           <span id="jobStatus" class="pill">空闲</span>
         </div>
       </header>
@@ -297,6 +298,32 @@
                     <span>间隔分钟</span>
                     <input id="syncInterval" inputmode="numeric" />
                   </label>
+                </div>
+
+                <div id="scheduleCard" class="schedule-card" aria-live="polite">
+                  <div class="schedule-card-head">
+                    <span id="scheduleState">计划同步未启用</span>
+                    <strong id="scheduleCountdown">-</strong>
+                  </div>
+                  <div class="schedule-facts">
+                    <div>
+                      <span>上次检查</span>
+                      <strong id="scheduleLastCheck">-</strong>
+                    </div>
+                    <div>
+                      <span>下次预计</span>
+                      <strong id="scheduleNextRun">-</strong>
+                    </div>
+                    <div>
+                      <span>检查次数</span>
+                      <strong id="scheduleCheckCount">0 次</strong>
+                    </div>
+                    <div>
+                      <span>触发次数</span>
+                      <strong id="scheduleTriggerCount">0 次</strong>
+                    </div>
+                  </div>
+                  <small id="scheduleLastMessage">-</small>
                 </div>
 
                 <div class="inline-options">

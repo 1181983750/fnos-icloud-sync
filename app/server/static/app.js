@@ -60,6 +60,15 @@ const els = {
   logConsoleInput: document.querySelector("#logConsoleInput"),
   logOutput: document.querySelector("#logOutput"),
   jobStatus: document.querySelector("#jobStatus"),
+  schedulerStatus: document.querySelector("#schedulerStatus"),
+  scheduleCard: document.querySelector("#scheduleCard"),
+  scheduleState: document.querySelector("#scheduleState"),
+  scheduleCountdown: document.querySelector("#scheduleCountdown"),
+  scheduleLastCheck: document.querySelector("#scheduleLastCheck"),
+  scheduleNextRun: document.querySelector("#scheduleNextRun"),
+  scheduleCheckCount: document.querySelector("#scheduleCheckCount"),
+  scheduleTriggerCount: document.querySelector("#scheduleTriggerCount"),
+  scheduleLastMessage: document.querySelector("#scheduleLastMessage"),
   photoCount: document.querySelector("#photoCount"),
   videoCount: document.querySelector("#videoCount"),
   noteCount: document.querySelector("#noteCount"),
@@ -144,6 +153,75 @@ function activeProfileSummary() {
 
 function activeProfileJob() {
   return appState.status?.job || activeProfileSummary()?.job || null;
+}
+
+function parseTimestamp(value) {
+  if (!value) {
+    return null;
+  }
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatTimestamp(value, fallback = "-") {
+  const date = parseTimestamp(value);
+  if (!date) {
+    return fallback;
+  }
+  return date.toLocaleString("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+}
+
+function formatDuration(seconds) {
+  const total = Math.max(0, Number(seconds || 0));
+  if (total < 60) {
+    return `${Math.floor(total)} 秒`;
+  }
+  const minutes = Math.floor(total / 60);
+  const remainingSeconds = Math.floor(total % 60);
+  if (minutes < 60) {
+    return remainingSeconds ? `${minutes} 分 ${remainingSeconds} 秒` : `${minutes} 分`;
+  }
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return remainingMinutes ? `${hours} 小时 ${remainingMinutes} 分` : `${hours} 小时`;
+}
+
+function isSchedulerHeartbeatStale(scheduler) {
+  if (!scheduler?.schedule_enabled) {
+    return false;
+  }
+  const lastCheck = parseTimestamp(scheduler.last_check);
+  return Boolean(lastCheck && Date.now() - lastCheck.getTime() > 150000);
+}
+
+function schedulerSummaryText(scheduler, job) {
+  if (!scheduler?.schedule_enabled) {
+    return "计划同步未启用";
+  }
+  if (!scheduler.content_enabled) {
+    return "计划同步已启用，未选择同步内容";
+  }
+  if ((job?.kind === "scheduled-media-sync" || job?.kind === "scheduled-notes-export") && job.status === "running") {
+    return "计划同步正在运行";
+  }
+  if (isSchedulerHeartbeatStale(scheduler)) {
+    return "调度器超过 2 分钟未检查";
+  }
+  if (!scheduler.last_check) {
+    return "等待调度器首次检查";
+  }
+  if (scheduler.due) {
+    return "已到计划时间，等待触发";
+  }
+  return "计划同步按周期检查中";
 }
 
 function cleanRelativePath(value) {
@@ -493,6 +571,7 @@ function renderProfiles() {
         "media-sync": "媒体同步",
         "scheduled-media-sync": "计划同步",
         "notes-export": "备忘录导出",
+        "scheduled-notes-export": "计划备忘录",
       };
       const jobLine = document.createElement("small");
       jobLine.textContent = job.waiting_input
@@ -712,6 +791,53 @@ function renderJob(job) {
   }
 }
 
+function renderSchedule(status) {
+  const scheduler = status.scheduler || {};
+  const job = status.job || activeProfileSummary()?.job || null;
+  const isConfigured = Boolean(scheduler.schedule_enabled);
+  const isRunning = (job?.kind === "scheduled-media-sync" || job?.kind === "scheduled-notes-export") && job.status === "running";
+  const isStale = isSchedulerHeartbeatStale(scheduler);
+  const summary = schedulerSummaryText(scheduler, job);
+
+  els.schedulerStatus.textContent = isConfigured
+    ? `${summary}${scheduler.last_check ? ` · ${formatTimestamp(scheduler.last_check)}` : ""}`
+    : summary;
+  els.schedulerStatus.className = "pill neutral";
+  if (isRunning || (isConfigured && !isStale)) {
+    els.schedulerStatus.classList.remove("neutral");
+  }
+  if (isStale || scheduler.last_status === "blocked" || scheduler.last_status === "failed") {
+    els.schedulerStatus.classList.add("warn");
+  }
+
+  els.scheduleCard.className = "schedule-card";
+  if (isConfigured) {
+    els.scheduleCard.classList.add("active");
+  }
+  if (isRunning) {
+    els.scheduleCard.classList.add("running");
+  }
+  if (isStale || scheduler.last_status === "blocked" || scheduler.last_status === "failed") {
+    els.scheduleCard.classList.add("warn");
+  }
+
+  els.scheduleState.textContent = summary;
+  if (!scheduler.active) {
+    els.scheduleCountdown.textContent = "-";
+  } else if (isRunning) {
+    els.scheduleCountdown.textContent = "正在运行";
+  } else if (scheduler.due) {
+    els.scheduleCountdown.textContent = "已到时间";
+  } else {
+    els.scheduleCountdown.textContent = `${formatDuration(scheduler.seconds_until_next)} 后`;
+  }
+  els.scheduleLastCheck.textContent = formatTimestamp(scheduler.last_check, "等待检查");
+  els.scheduleNextRun.textContent = scheduler.active ? formatTimestamp(scheduler.next_run, "-") : "-";
+  els.scheduleCheckCount.textContent = `${scheduler.check_count || 0} 次`;
+  els.scheduleTriggerCount.textContent = `${scheduler.trigger_count || 0} 次`;
+  els.scheduleLastMessage.textContent = scheduler.last_message || "-";
+}
+
 function renderStatus(status) {
   appState.status = status;
   appState.runningJobsCount = status.running_jobs_count || 0;
@@ -736,6 +862,7 @@ function renderStatus(status) {
   const lastNotes = status.state?.last_notes_sync || "从未导出备忘录";
   els.lastSync.textContent = `媒体: ${lastMedia} / 备忘录: ${lastNotes}`;
   renderProfiles();
+  renderSchedule(status);
   renderJob(status.job || { status: "idle", log: [] });
   updateGuide();
 }
@@ -788,6 +915,8 @@ async function refreshStatus() {
   } catch (error) {
     els.jobStatus.textContent = "服务未连接";
     els.jobStatus.className = "pill error";
+    els.schedulerStatus.textContent = "调度器未连接";
+    els.schedulerStatus.className = "pill error";
     setRunning(false);
   }
 }

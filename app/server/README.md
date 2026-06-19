@@ -11,7 +11,7 @@
 
 ## 主要接口
 
-- `GET /api/status`：返回任务状态、存储路径、依赖检测结果和统计信息。
+- `GET /api/status`：返回任务状态、计划同步调度状态、存储路径、依赖检测结果和统计信息。
 - `POST /api/config`：保存当前同步方案配置。
 - `POST /api/auth`：执行 iCloud 认证。
 - `POST /api/sync/media`：同步照片/视频。

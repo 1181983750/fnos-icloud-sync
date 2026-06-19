@@ -81,7 +81,14 @@ if [ ! -f "${STATE_FILE}" ]; then
     "default": {
       "last_media_sync": "",
       "last_notes_sync": "",
-      "last_scheduler_check": ""
+      "last_scheduler_check": "",
+      "last_media_schedule_attempt": "",
+      "last_notes_schedule_attempt": "",
+      "last_scheduler_trigger": "",
+      "scheduler_check_count": 0,
+      "scheduler_trigger_count": 0,
+      "last_scheduler_status": "",
+      "last_scheduler_message": ""
     }
   }
 }
